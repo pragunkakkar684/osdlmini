@@ -1,0 +1,148 @@
+/* Grand Hotel Management System — Dark Theme CSS */
+
+/* Root background */
+.root {
+    -fx-background-color: #1a1a2e;
+    -fx-font-family: "Segoe UI", Arial, sans-serif;
+}
+
+/* TabPane header */
+.tab-pane .tab-header-area .tab-header-background {
+    -fx-background-color: #16213e;
+}
+
+.tab-pane .tab {
+    -fx-background-color: #16213e;
+    -fx-text-base-color: #aaaaaa;
+}
+
+.tab-pane .tab:selected {
+    -fx-background-color: #0f3460;
+    -fx-text-base-color: white;
+}
+
+.tab .tab-label {
+    -fx-text-fill: #cccccc;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+}
+
+.tab:selected .tab-label {
+    -fx-text-fill: white;
+}
+
+/* TableView */
+.table-view {
+    -fx-background-color: #16213e;
+    -fx-control-inner-background: #16213e;
+    -fx-table-cell-border-color: #0f3460;
+}
+
+.table-view .column-header {
+    -fx-background-color: #0f3460;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+}
+
+.table-view .column-header .label {
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+}
+
+.table-row-cell {
+    -fx-background-color: #16213e;
+    -fx-text-fill: white;
+    -fx-border-color: #0f3460;
+}
+
+.table-row-cell:selected {
+    -fx-background-color: #0f3460;
+}
+
+.table-cell {
+    -fx-text-fill: white;
+    -fx-alignment: center-left;
+}
+
+/* Scroll bar */
+.scroll-bar:vertical {
+    -fx-background-color: #16213e;
+}
+
+.scroll-bar:vertical .thumb {
+    -fx-background-color: #0f3460;
+    -fx-background-radius: 4;
+}
+
+/* Button hover effect */
+.button:hover {
+    -fx-opacity: 0.85;
+    -fx-scale-x: 1.02;
+    -fx-scale-y: 1.02;
+}
+
+/* TextField focus */
+.text-field:focused {
+    -fx-border-color: #3498db;
+    -fx-border-width: 2;
+    -fx-border-radius: 4;
+}
+
+/* ComboBox */
+.combo-box {
+    -fx-background-color: #16213e;
+    -fx-text-fill: white;
+    -fx-border-color: #3498db;
+    -fx-border-radius: 4;
+}
+
+.combo-box .list-cell {
+    -fx-background-color: #16213e;
+    -fx-text-fill: white;
+}
+
+/* BarChart */
+.chart {
+    -fx-background-color: #16213e;
+    -fx-padding: 10;
+}
+
+.chart-title {
+    -fx-text-fill: white;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+
+.chart-plot-background {
+    -fx-background-color: #1a1a2e;
+}
+
+.axis {
+    -fx-tick-label-fill: white;
+}
+
+.axis-label {
+    -fx-text-fill: white;
+}
+
+/* Dialog pane */
+.dialog-pane {
+    -fx-background-color: #1a1a2e;
+}
+
+.dialog-pane .header-panel {
+    -fx-background-color: #16213e;
+}
+
+.dialog-pane .header-panel .label {
+    -fx-text-fill: white;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+.dialog-pane .button-bar .button {
+    -fx-background-color: #3498db;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-background-radius: 5;
+}
