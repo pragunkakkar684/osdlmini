@@ -1,148 +1,178 @@
-/* Grand Hotel Management System — Dark Theme CSS */
+/* The Fern - Luxurious & Minimal Theme (Sidebar) */
 
-/* Root background */
 .root {
-    -fx-background-color: #1a1a2e;
-    -fx-font-family: "Segoe UI", Arial, sans-serif;
+    -fx-background-color: #FAFAFA;
+    -fx-font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 }
 
-/* TabPane header */
-.tab-pane .tab-header-area .tab-header-background {
-    -fx-background-color: #16213e;
+/* Sidebar Properties */
+.sidebar {
+    -fx-background-color: #1A3626; /* Dark forest green */
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 15, 0, 0, 0);
 }
 
-.tab-pane .tab {
-    -fx-background-color: #16213e;
-    -fx-text-base-color: #aaaaaa;
-}
-
-.tab-pane .tab:selected {
-    -fx-background-color: #0f3460;
-    -fx-text-base-color: white;
-}
-
-.tab .tab-label {
-    -fx-text-fill: #cccccc;
-    -fx-font-size: 13px;
+.sidebar-brand {
+    -fx-text-fill: white;
+    -fx-font-size: 28px;
     -fx-font-weight: bold;
 }
 
-.tab:selected .tab-label {
+.sidebar-btn {
+    -fx-background-color: transparent;
+    -fx-text-fill: #9CAEA5;
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-padding: 18 20 18 30;
+    -fx-background-radius: 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0 0 0 5;
+    -fx-cursor: hand;
+}
+
+.sidebar-btn:hover {
+    -fx-background-color: #152C1F;
     -fx-text-fill: white;
 }
 
-/* TableView */
-.table-view {
-    -fx-background-color: #16213e;
-    -fx-control-inner-background: #16213e;
-    -fx-table-cell-border-color: #0f3460;
+.sidebar-btn:selected {
+    -fx-background-color: #12281C;
+    -fx-text-fill: white;
+    -fx-border-color: transparent transparent transparent #D4AF37; /* Gold left border */
 }
 
-.table-view .column-header {
-    -fx-background-color: #0f3460;
+/* Content Area */
+.content-area {
+    -fx-background-color: #FAFAFA;
+}
+
+/* Dashboard Cards */
+.dashboard-card {
+    -fx-background-color: white;
+    -fx-background-radius: 6;
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.05), 15, 0, 0, 5);
+}
+
+.dashboard-card:hover {
+    -fx-cursor: hand;
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 20, 0, 0, 8);
+}
+
+/* Stat Cards */
+.stat-card {
+    -fx-background-color: white;
+    -fx-background-radius: 6;
+    -fx-border-color: transparent transparent transparent #D4AF37;
+    -fx-border-width: 0 0 0 4;
+    -fx-border-radius: 4;
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.04), 10, 0, 0, 4);
+    -fx-padding: 20 25;
+}
+
+/* Typography elements */
+.header-label {
+    -fx-text-fill: #1A3626;
+    -fx-font-size: 26px;
+    -fx-font-weight: bold;
+    -fx-padding: 0 0 10 0;
+}
+
+/* Buttons */
+.button {
+    -fx-background-color: #1A3626;
     -fx-text-fill: white;
     -fx-font-weight: bold;
-}
-
-.table-view .column-header .label {
-    -fx-text-fill: white;
-    -fx-font-weight: bold;
-}
-
-.table-row-cell {
-    -fx-background-color: #16213e;
-    -fx-text-fill: white;
-    -fx-border-color: #0f3460;
-}
-
-.table-row-cell:selected {
-    -fx-background-color: #0f3460;
-}
-
-.table-cell {
-    -fx-text-fill: white;
-    -fx-alignment: center-left;
-}
-
-/* Scroll bar */
-.scroll-bar:vertical {
-    -fx-background-color: #16213e;
-}
-
-.scroll-bar:vertical .thumb {
-    -fx-background-color: #0f3460;
     -fx-background-radius: 4;
+    -fx-padding: 8 20 8 20;
 }
 
-/* Button hover effect */
 .button:hover {
-    -fx-opacity: 0.85;
-    -fx-scale-x: 1.02;
-    -fx-scale-y: 1.02;
+    -fx-background-color: #244A35;
+    -fx-cursor: hand;
 }
 
-/* TextField focus */
-.text-field:focused {
-    -fx-border-color: #3498db;
-    -fx-border-width: 2;
-    -fx-border-radius: 4;
-}
-
-/* ComboBox */
-.combo-box {
-    -fx-background-color: #16213e;
+.button-gold {
+    -fx-background-color: #D4AF37;
     -fx-text-fill: white;
-    -fx-border-color: #3498db;
+}
+
+.button-gold:hover {
+    -fx-background-color: #E2BC45;
+}
+
+/* Input Fields */
+.text-field, .combo-box {
+    -fx-background-color: white;
+    -fx-border-color: #E0E4E2;
     -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-text-fill: #1A3626;
+    -fx-padding: 6 10;
+}
+
+.text-field:focused, .combo-box:focused {
+    -fx-border-color: #D4AF37;
+    -fx-border-width: 1;
 }
 
 .combo-box .list-cell {
-    -fx-background-color: #16213e;
-    -fx-text-fill: white;
+    -fx-background-color: white;
+    -fx-text-fill: #1A3626;
 }
 
-/* BarChart */
-.chart {
-    -fx-background-color: #16213e;
-    -fx-padding: 10;
+.combo-box .list-cell:hover {
+    -fx-background-color: #FAFAFA;
 }
 
-.chart-title {
-    -fx-text-fill: white;
-    -fx-font-size: 14px;
-    -fx-font-weight: bold;
+/* Scroll bar minimalistic */
+.scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-pref-width: 8;
 }
 
-.chart-plot-background {
-    -fx-background-color: #1a1a2e;
+.scroll-bar:vertical .thumb {
+    -fx-background-color: #D0D6D2;
+    -fx-background-radius: 4;
 }
 
-.axis {
-    -fx-tick-label-fill: white;
+.scroll-bar:vertical .thumb:hover {
+    -fx-background-color: #9CAEA5;
 }
 
-.axis-label {
-    -fx-text-fill: white;
-}
-
-/* Dialog pane */
+/* Dialogs */
 .dialog-pane {
-    -fx-background-color: #1a1a2e;
+    -fx-background-color: #FAFAFA;
 }
-
 .dialog-pane .header-panel {
-    -fx-background-color: #16213e;
+    -fx-background-color: #1A3626;
 }
-
 .dialog-pane .header-panel .label {
     -fx-text-fill: white;
-    -fx-font-size: 15px;
+    -fx-font-size: 18px;
     -fx-font-weight: bold;
 }
-
 .dialog-pane .button-bar .button {
-    -fx-background-color: #3498db;
+    -fx-background-color: #1A3626;
     -fx-text-fill: white;
+}
+.dialog-pane .button-bar .button:hover {
+    -fx-background-color: #244A35;
+}
+
+/* Charts */
+.chart {
+    -fx-background-color: white;
+    -fx-background-radius: 6;
+    -fx-padding: 20;
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.06), 15, 0, 0, 5);
+}
+.chart-title {
+    -fx-text-fill: #1A3626;
+    -fx-font-size: 18px;
     -fx-font-weight: bold;
-    -fx-background-radius: 5;
+}
+.chart-plot-background {
+    -fx-background-color: #FAFAFA;
+}
+.axis-label, .axis {
+    -fx-tick-label-fill: #1A3626;
 }

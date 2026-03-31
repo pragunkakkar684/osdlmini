@@ -9,8 +9,8 @@ import com.hotel.repository.BookingRepository;
 import com.hotel.repository.GuestRepository;
 import com.hotel.repository.RoomRepository;
 import com.hotel.service.BookingService;
-import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -20,36 +20,16 @@ import javafx.scene.chart.CategoryAxis;
 import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.XYChart;
 import javafx.scene.control.*;
-import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Main JavaFX window — contains all tabs and UI logic.
- *
- * JavaFX CONCEPTS USED:
- *   TabPane, Tab           — tab-based navigation
- *   TableView<T>           — data table display
- *   ObservableList<T>      — live-updating list bound to TableView
- *   TableColumn            — defines a column in TableView
- *   TextField, ComboBox,
- *   DatePicker, Dialog     — input controls
- *   BarChart               — occupancy visualization
- *   VBox, HBox, GridPane   — layout containers
- *   Label, Button          — basic controls
- *   Alert                  — popup dialogs
- *   Platform.runLater()    — thread-safe UI updates (called from background threads)
- */
 public class MainWindow {
-
-    // Dependencies
     private final RoomRepository    roomRepo;
     private final GuestRepository   guestRepo;
     private final BookingRepository bookingRepo;
@@ -57,18 +37,19 @@ public class MainWindow {
     private final InvoiceExporter   invoiceExporter;
     private final LogManager        logger;
 
-    // ObservableLists — when these change, TableView auto-refreshes
     private final ObservableList<Room>    roomList    = FXCollections.observableArrayList();
     private final ObservableList<Guest>   guestList   = FXCollections.observableArrayList();
     private final ObservableList<Booking> bookingList = FXCollections.observableArrayList();
 
-    // Dashboard labels (updated by OccupancyReporterThread via updateDashboard())
+    private Room selectedRoom;
+    private VBox selectedRoomCard;
+    private Guest selectedGuest;
+    private VBox selectedGuestCard;
+    private Booking selectedBooking;
+    private HBox selectedBookingCard;
+
     private Label lblTotal, lblAvailable, lblOccupied, lblRevenue;
-
-    // Alert label at top of window
     private Label alertBanner;
-
-    // BarChart for dashboard occupancy
     private BarChart<String, Number> occupancyChart;
     private XYChart.Series<String, Number> chartSeries;
 
@@ -84,107 +65,112 @@ public class MainWindow {
         refreshAllLists();
     }
 
-    /** Builds and returns the main Scene with all tabs */
     public Scene buildScene() {
-        TabPane tabPane = new TabPane();
-        tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
-        tabPane.setStyle("-fx-background-color: #1a1a2e;");
+        BorderPane mainContainer = new BorderPane();
+        
+        // --- Sidebar ---
+        VBox sidebar = new VBox();
+        sidebar.getStyleClass().add("sidebar");
+        sidebar.setPrefWidth(260);
 
-        tabPane.getTabs().addAll(
-                buildDashboardTab(),
-                buildRoomsTab(),
-                buildGuestsTab(),
-                buildBookingsTab(),
-                buildThreadMonitorTab()
-        );
+        Label brand = new Label("🌿 The Fern");
+        brand.getStyleClass().add("sidebar-brand");
+        VBox.setMargin(brand, new Insets(40, 0, 40, 30));
 
-        // Alert banner at the top (shown when CheckoutReminderThread fires)
+        ToggleGroup navGroup = new ToggleGroup();
+        ToggleButton navDash    = navButton("📊 Dashboard", navGroup);
+        ToggleButton navRooms   = navButton("🛏 Rooms", navGroup);
+        ToggleButton navGuests  = navButton("👤 Guests", navGroup);
+        ToggleButton navBooks   = navButton("📋 Bookings", navGroup);
+        ToggleButton navThreads = navButton("🧵 Threads", navGroup);
+
+        sidebar.getChildren().addAll(brand, navDash, navRooms, navGuests, navBooks, navThreads);
+
+        // --- Content Area ---
+        StackPane contentArea = new StackPane();
+        contentArea.getStyleClass().add("content-area");
+
+        Region viewDashboard = buildDashboardView();
+        Region viewRooms     = buildRoomsView();
+        Region viewGuests    = buildGuestsView();
+        Region viewBookings  = buildBookingsView();
+        Region viewThreads   = buildThreadMonitorView();
+
+        navDash.setOnAction(e -> { if(navDash.isSelected()) setView(contentArea, viewDashboard); });
+        navRooms.setOnAction(e -> { if(navRooms.isSelected()) setView(contentArea, viewRooms); });
+        navGuests.setOnAction(e -> { if(navGuests.isSelected()) setView(contentArea, viewGuests); });
+        navBooks.setOnAction(e -> { if(navBooks.isSelected()) setView(contentArea, viewBookings); });
+        navThreads.setOnAction(e -> { if(navThreads.isSelected()) setView(contentArea, viewThreads); });
+
+        // Default active
+        navDash.setSelected(true);
+        setView(contentArea, viewDashboard);
+
         alertBanner = new Label();
-        alertBanner.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; "
-                + "-fx-font-size: 13px; -fx-padding: 5 15; -fx-font-weight: bold;");
+        alertBanner.setStyle("-fx-background-color: #E74C3C; -fx-text-fill: white; "
+                + "-fx-font-size: 13px; -fx-padding: 10 20; -fx-font-weight: bold;");
         alertBanner.setMaxWidth(Double.MAX_VALUE);
         alertBanner.setVisible(false);
 
-        VBox root = new VBox(alertBanner, tabPane);
-        VBox.setVgrow(tabPane, Priority.ALWAYS);
-        root.setStyle("-fx-background-color: #1a1a2e;");
+        mainContainer.setTop(alertBanner);
+        mainContainer.setLeft(sidebar);
+        mainContainer.setCenter(contentArea);
 
-        Scene scene = new Scene(root, 1100, 700);
+        Scene scene = new Scene(mainContainer, 1200, 750);
         scene.getStylesheets().add(getClass().getResource("/styles/main.css") != null
                 ? getClass().getResource("/styles/main.css").toExternalForm() : "");
         return scene;
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // TAB 1 — DASHBOARD
-    // ═══════════════════════════════════════════════════════════════════
-    private Tab buildDashboardTab() {
-        Tab tab = new Tab("📊 Dashboard");
+    private void setView(StackPane container, Region view) {
+        container.getChildren().setAll(view);
+    }
 
-        // Stat cards row
-        lblTotal     = statCard("Total Rooms",  "0", "#3498db");
-        lblAvailable = statCard("Available",    "0", "#2ecc71");
-        lblOccupied  = statCard("Occupied",     "0", "#e74c3c");
-        lblRevenue   = statCard("Revenue (Rs)", "0", "#f39c12");
+    private ToggleButton navButton(String text, ToggleGroup group) {
+        ToggleButton btn = new ToggleButton(text);
+        btn.getStyleClass().add("sidebar-btn");
+        btn.setToggleGroup(group);
+        btn.setMaxWidth(Double.MAX_VALUE);
+        btn.setAlignment(Pos.CENTER_LEFT);
+        return btn;
+    }
+
+    // DASHBOARD VIEW
+    private Region buildDashboardView() {
+        lblTotal     = statCard("Total Rooms",  "0");
+        lblAvailable = statCard("Available",    "0");
+        lblOccupied  = statCard("Occupied",     "0");
+        lblRevenue   = statCard("Revenue", "Rs. 0");
 
         HBox statsRow = new HBox(15, lblTotal, lblAvailable, lblOccupied, lblRevenue);
-        statsRow.setPadding(new Insets(15));
-        statsRow.setAlignment(Pos.CENTER);
+        statsRow.setPadding(new Insets(15, 0, 15, 0));
+        statsRow.setAlignment(Pos.CENTER_LEFT);
 
-        // BarChart
         CategoryAxis xAxis = new CategoryAxis();
         NumberAxis   yAxis = new NumberAxis();
         xAxis.setLabel("Status");
         yAxis.setLabel("Count");
         occupancyChart = new BarChart<>(xAxis, yAxis);
         occupancyChart.setTitle("Room Occupancy Overview");
-        occupancyChart.setStyle("-fx-background-color: #16213e;");
         occupancyChart.setMinHeight(300);
         chartSeries = new XYChart.Series<>();
         chartSeries.setName("Rooms");
         occupancyChart.getData().add(chartSeries);
 
-        VBox layout = new VBox(20, headerLabel("🏨 Grand Hotel — Dashboard"), statsRow, occupancyChart);
-        layout.setPadding(new Insets(20));
-        layout.setStyle("-fx-background-color: #1a1a2e;");
-        tab.setContent(layout);
-        return tab;
+        VBox layout = new VBox(20, headerLabel("Dashboard"), statsRow, occupancyChart);
+        layout.setPadding(new Insets(40));
+        
+        ScrollPane sp = new ScrollPane(layout);
+        sp.setFitToWidth(true);
+        sp.setStyle("-fx-background-color: transparent; -fx-background: #FAFAFA;");
+        return sp;
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // TAB 2 — ROOMS
-    // ═══════════════════════════════════════════════════════════════════
-    private Tab buildRoomsTab() {
-        Tab tab = new Tab("🛏 Rooms");
+    // ROOMS VIEW
+    private Region buildRoomsView() {
+        FlowPane grid = new FlowPane(15, 15);
+        grid.setPadding(new Insets(15, 0, 15, 0));
 
-        TableView<Room> table = new TableView<>(roomList);
-        table.setStyle("-fx-background-color: #16213e; -fx-text-fill: white;");
-
-        table.getColumns().addAll(
-                col("Room ID",    "roomId"),
-                col("Type",       "type"),
-                col("Floor",      "floorNumber"),
-                col("Status",     "status"),
-                col("Price/Night","pricePerNight"),
-                col("Max Occ.",   "maxOccupancy"),
-                col("Description","description")
-        );
-
-        // Color rows by status
-        table.setRowFactory(tv -> new TableRow<>() {
-            @Override
-            protected void updateItem(Room room, boolean empty) {
-                super.updateItem(room, empty);
-                if (room == null || empty) {
-                    setStyle("");
-                } else {
-                    setStyle("-fx-background-color: "
-                            + room.getStatus().getColorHex() + "33;"); // 33 = 20% opacity
-                }
-            }
-        });
-
-        // Filter bar
         ComboBox<String> filterType = new ComboBox<>();
         filterType.getItems().addAll("All", "Standard", "Deluxe", "Suite");
         filterType.setValue("All");
@@ -194,168 +180,287 @@ public class MainWindow {
             else { roomList.setAll(roomRepo.getByType(RoomType.valueOf(sel.toUpperCase()))); }
         });
 
-        Button btnAdd      = actionButton("➕ Add Room",    "#2ecc71");
-        Button btnMaint    = actionButton("🔧 Maintenance", "#e67e22");
-        Button btnRefresh  = actionButton("🔄 Refresh",     "#3498db");
+        Button btnAdd      = actionButton("➕ Add Room",    null);
+        Button btnMaint    = actionButton("🔧 Maintenance", "#D4AF37");
+        Button btnRefresh  = actionButton("🔄 Refresh",     null);
+        
+        for (Room r : roomList) { grid.getChildren().add(createRoomCard(r, btnMaint)); }
+        roomList.addListener((ListChangeListener.Change<? extends Room> c) -> {
+            grid.getChildren().clear();
+            for (Room r : roomList) {
+                grid.getChildren().add(createRoomCard(r, btnMaint));
+            }
+        });
+        
+        ScrollPane scroll = new ScrollPane(grid);
+        scroll.setFitToWidth(true);
+        scroll.setStyle("-fx-background-color: transparent; -fx-background: #FAFAFA;");
 
         btnAdd.setOnAction(e -> showAddRoomDialog());
         btnMaint.setOnAction(e -> {
-            Room sel = table.getSelectionModel().getSelectedItem();
-            if (sel != null) {
-                sel.setStatus(RoomStatus.MAINTENANCE);
+            if (selectedRoom != null) {
+                if (selectedRoom.getStatus() == RoomStatus.MAINTENANCE) {
+                    selectedRoom.setStatus(RoomStatus.AVAILABLE);
+                } else if (selectedRoom.getStatus() == RoomStatus.AVAILABLE) {
+                    selectedRoom.setStatus(RoomStatus.MAINTENANCE);
+                } else {
+                    showAlert("Cannot modify a booked or occupied room!");
+                    return;
+                }
                 refreshRoomTable();
+                selectedRoom = null;
+                selectedRoomCard = null;
+                btnMaint.setText("🔧 Maintenance");
+                btnMaint.setStyle("-fx-background-color: #D4AF37; -fx-text-fill: white;");
+            } else {
+                showAlert("Please select a room card first.");
             }
         });
         btnRefresh.setOnAction(e -> refreshRoomTable());
 
-        HBox toolbar = new HBox(10,
-                new Label("Filter: "), filterType, btnAdd, btnMaint, btnRefresh);
-        toolbar.setPadding(new Insets(10));
+        HBox toolbar = new HBox(10, boldLabel("Filter: "), filterType, btnAdd, btnMaint, btnRefresh);
         toolbar.setAlignment(Pos.CENTER_LEFT);
-        toolbar.setStyle("-fx-background-color: #16213e;");
-        styleLabels(toolbar);
+        toolbar.setPadding(new Insets(0, 0, 10, 0));
 
-        VBox layout = new VBox(10, headerLabel("🛏 Room Management"), toolbar, table);
-        VBox.setVgrow(table, Priority.ALWAYS);
-        layout.setPadding(new Insets(15));
-        layout.setStyle("-fx-background-color: #1a1a2e;");
-        tab.setContent(layout);
-        return tab;
+        VBox layout = new VBox(15, headerLabel("Room Management"), toolbar, scroll);
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+        layout.setPadding(new Insets(40));
+        return layout;
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // TAB 3 — GUESTS
-    // ═══════════════════════════════════════════════════════════════════
-    private Tab buildGuestsTab() {
-        Tab tab = new Tab("👤 Guests");
+    private VBox createRoomCard(Room r, Button btnMaint) {
+        VBox card = new VBox(8);
+        card.getStyleClass().add("dashboard-card");
+        card.setPadding(new Insets(15));
+        card.setPrefWidth(220);
+        
+        Label lblId = new Label("Room " + r.getRoomId());
+        lblId.setFont(Font.font("Segoe UI", FontWeight.BOLD, 18));
+        lblId.setTextFill(Color.web("#1A3626"));
+        
+        Label lblType = new Label(r.getType().toString());
+        lblType.setStyle("-fx-text-fill: #9CAEA5; -fx-font-weight: bold;");
+        
+        Label lblStatus = new Label(r.getStatus().toString());
+        lblStatus.setStyle("-fx-background-color: " + r.getStatus().getColorHex() + "; -fx-text-fill: white; -fx-padding: 4 10; -fx-background-radius: 12; -fx-font-size: 11px; -fx-font-weight: bold;");
+        
+        Label lblPrice = new Label("Rs. " + String.format("%.0f", r.getPricePerNight()) + " / night");
+        lblPrice.setStyle("-fx-font-weight: bold; -fx-text-fill: #1A3626; -fx-font-size: 14px;");
+        
+        Label lblDesc = new Label(r.getDescription());
+        lblDesc.setWrapText(true);
+        lblDesc.setStyle("-fx-font-size: 12px; -fx-text-fill: #9CAEA5;");
+        lblDesc.setMaxHeight(45);
+        
+        Region spacer = new Region();
+        VBox.setVgrow(spacer, Priority.ALWAYS);
 
-        TableView<Guest> table = new TableView<>(guestList);
-        table.setStyle("-fx-background-color: #16213e;");
-        table.getColumns().addAll(
-                col("Guest ID",   "guestId"),
-                col("Name",       "name"),
-                col("Phone",      "phone"),
-                col("Email",      "email"),
-                col("Age",        "age"),
-                col("ID Proof",   "idProofType"),
-                col("ID Number",  "idProofNumber"),
-                col("Deposit",    "depositAmount")
-        );
+        card.getChildren().addAll(lblId, lblType, lblStatus, spacer, lblPrice, lblDesc);
+        
+        card.setOnMouseClicked(e -> {
+            if (selectedRoomCard != null) {
+                selectedRoomCard.setStyle("");
+            }
+            selectedRoomCard = card;
+            selectedRoom = r;
+            card.setStyle("-fx-border-color: #1A3626; -fx-border-width: 2;");
+            
+            if (r.getStatus() == RoomStatus.MAINTENANCE) {
+                btnMaint.setText("✅ End Maint");
+                btnMaint.setStyle("-fx-background-color: #2ECC71; -fx-text-fill: white;");
+            } else {
+                btnMaint.setText("🔧 Maintenance");
+                btnMaint.setStyle("-fx-background-color: #D4AF37; -fx-text-fill: white;");
+            }
+        });
+        return card;
+    }
+
+    // GUESTS VIEW
+    private Region buildGuestsView() {
+        FlowPane grid = new FlowPane(15, 15);
+        grid.setPadding(new Insets(15, 0, 15, 0));
+        
+        for (Guest g : guestList) { grid.getChildren().add(createGuestCard(g)); }
+        guestList.addListener((ListChangeListener.Change<? extends Guest> c) -> {
+            grid.getChildren().clear();
+            for (Guest g : guestList) {
+                grid.getChildren().add(createGuestCard(g));
+            }
+        });
+
+        ScrollPane scroll = new ScrollPane(grid);
+        scroll.setFitToWidth(true);
+        scroll.setStyle("-fx-background-color: transparent; -fx-background: #FAFAFA;");
 
         TextField searchField = new TextField();
         searchField.setPromptText("Search by name, phone, ID...");
-        searchField.setStyle("-fx-background-color: #16213e; -fx-text-fill: white; -fx-prompt-text-fill: grey;");
         searchField.textProperty().addListener((obs, old, query) -> {
             if (query.isEmpty()) guestList.setAll(guestRepo.getAll());
             else guestList.setAll(guestRepo.search(query));
         });
 
-        Button btnAdd     = actionButton("➕ Register Guest", "#2ecc71");
-        Button btnRefresh = actionButton("🔄 Refresh",        "#3498db");
+        Button btnAdd     = actionButton("➕ Register Guest", null);
+        Button btnRefresh = actionButton("🔄 Refresh",        null);
         btnAdd.setOnAction(e -> showAddGuestDialog());
         btnRefresh.setOnAction(e -> { guestList.setAll(guestRepo.getAll()); });
 
-        HBox toolbar = new HBox(10, new Label("🔍 "), searchField, btnAdd, btnRefresh);
-        toolbar.setPadding(new Insets(10));
+        HBox toolbar = new HBox(10, boldLabel("🔍 Search: "), searchField, btnAdd, btnRefresh);
         toolbar.setAlignment(Pos.CENTER_LEFT);
-        toolbar.setStyle("-fx-background-color: #16213e;");
-        styleLabels(toolbar);
+        toolbar.setPadding(new Insets(0, 0, 10, 0));
 
-        VBox layout = new VBox(10, headerLabel("👤 Guest Management"), toolbar, table);
-        VBox.setVgrow(table, Priority.ALWAYS);
-        layout.setPadding(new Insets(15));
-        layout.setStyle("-fx-background-color: #1a1a2e;");
-        tab.setContent(layout);
-        return tab;
+        VBox layout = new VBox(15, headerLabel("Guest Management"), toolbar, scroll);
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+        layout.setPadding(new Insets(40));
+        return layout;
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // TAB 4 — BOOKINGS (Book / Check-in / Check-out)
-    // ═══════════════════════════════════════════════════════════════════
-    private Tab buildBookingsTab() {
-        Tab tab = new Tab("📋 Bookings");
+    private VBox createGuestCard(Guest g) {
+        VBox card = new VBox(8);
+        card.getStyleClass().add("dashboard-card");
+        card.setPadding(new Insets(15));
+        card.setPrefWidth(240);
+        
+        Label lblName = new Label(g.getName());
+        lblName.setFont(Font.font("Segoe UI", FontWeight.BOLD, 16));
+        lblName.setTextFill(Color.web("#1A3626"));
+        
+        Label lblId = new Label("ID: " + g.getGuestId());
+        lblId.setStyle("-fx-text-fill: #9CAEA5; -fx-font-weight: bold;");
+        
+        Label lblContact = new Label("📞 " + g.getPhone() + "\n📧 " + g.getEmail());
+        lblContact.setStyle("-fx-text-fill: #1A3626; -fx-font-size: 13px;");
+        
+        Label lblDocs = new Label("Proof: " + g.getIdProofType() + " (" + g.getIdProofNumber() + ")\nAge: " + g.getAge());
+        lblDocs.setStyle("-fx-text-fill: #9CAEA5; -fx-font-size: 12px;");
 
-        TableView<Booking> table = new TableView<>(bookingList);
-        table.setStyle("-fx-background-color: #16213e;");
+        card.getChildren().addAll(lblName, lblId, lblContact, lblDocs);
+        
+        card.setOnMouseClicked(e -> {
+            if (selectedGuestCard != null) selectedGuestCard.setStyle("");
+            selectedGuestCard = card;
+            selectedGuest = g;
+            card.setStyle("-fx-border-color: #1A3626; -fx-border-width: 2;");
+        });
+        return card;
+    }
 
-        TableColumn<Booking,String> colId      = new TableColumn<>("Booking ID");
-        TableColumn<Booking,String> colGuest   = new TableColumn<>("Guest ID");
-        TableColumn<Booking,String> colRoom    = new TableColumn<>("Room ID");
-        TableColumn<Booking,String> colIn      = new TableColumn<>("Check-In");
-        TableColumn<Booking,String> colOut     = new TableColumn<>("Check-Out");
-        TableColumn<Booking,String> colNights  = new TableColumn<>("Nights");
-        TableColumn<Booking,String> colStatus  = new TableColumn<>("Payment");
-        TableColumn<Booking,String> colAmount  = new TableColumn<>("Amount");
+    // BOOKINGS VIEW
+    private Region buildBookingsView() {
+        VBox list = new VBox(10);
+        list.setPadding(new Insets(10, 0, 15, 0));
+        
+        for (Booking b : bookingList) { list.getChildren().add(createBookingCard(b)); }
+        bookingList.addListener((ListChangeListener.Change<? extends Booking> c) -> {
+            list.getChildren().clear();
+            for (Booking b : bookingList) {
+                list.getChildren().add(createBookingCard(b));
+            }
+        });
 
-        colId.setCellValueFactory(d->new SimpleStringProperty(d.getValue().getBookingId()));
-        colGuest.setCellValueFactory(d->new SimpleStringProperty(d.getValue().getGuestId()));
-        colRoom.setCellValueFactory(d->new SimpleStringProperty(d.getValue().getRoomId()));
-        colIn.setCellValueFactory(d->new SimpleStringProperty(d.getValue().getCheckInDate().toString()));
-        colOut.setCellValueFactory(d->new SimpleStringProperty(d.getValue().getCheckOutDate().toString()));
-        colNights.setCellValueFactory(d->new SimpleStringProperty(String.valueOf(d.getValue().getNumberOfNights())));
-        colStatus.setCellValueFactory(d->new SimpleStringProperty(d.getValue().getPaymentStatus().getDisplayName()));
-        colAmount.setCellValueFactory(d->new SimpleStringProperty("Rs."+String.format("%.2f",d.getValue().getTotalAmount())));
+        ScrollPane scroll = new ScrollPane(list);
+        scroll.setFitToWidth(true);
+        scroll.setStyle("-fx-background-color: transparent; -fx-background: #FAFAFA;");
 
-        table.getColumns().addAll(colId,colGuest,colRoom,colIn,colOut,colNights,colStatus,colAmount);
-
-        Button btnBook    = actionButton("📝 Book Room",  "#3498db");
-        Button btnCheckIn = actionButton("✅ Check-In",   "#2ecc71");
-        Button btnCheckOut= actionButton("🏁 Check-Out",  "#e74c3c");
-        Button btnRefresh = actionButton("🔄 Refresh",    "#95a5a6");
+        Button btnBook    = actionButton("📝 Book Room",  null);
+        Button btnCheckIn = actionButton("✅ Check-In",   null);
+        Button btnCheckOut= actionButton("🏁 Check-Out",  "#E74C3C");
+        Button btnRefresh = actionButton("🔄 Refresh",    null);
 
         btnBook.setOnAction(e -> showBookRoomDialog());
         btnCheckIn.setOnAction(e -> {
-            Booking sel = table.getSelectionModel().getSelectedItem();
-            if (sel != null) showBookingResult(bookingService.checkIn(sel.getBookingId()));
-            refreshBookingList();
+            if (selectedBooking != null) {
+                showBookingResult(bookingService.checkIn(selectedBooking.getBookingId()));
+                refreshBookingList();
+            } else {
+                showAlert("Please select a booking card first.");
+            }
         });
         btnCheckOut.setOnAction(e -> {
-            Booking sel = table.getSelectionModel().getSelectedItem();
-            if (sel != null) {
-                String result = bookingService.checkOut(sel.getBookingId());
+            if (selectedBooking != null) {
+                String result = bookingService.checkOut(selectedBooking.getBookingId());
                 showBookingResult(result);
                 if (result.startsWith("SUCCESS")) {
-                    generateInvoice(sel);
+                    generateInvoice(selectedBooking);
                 }
                 refreshBookingList();
                 refreshRoomTable();
+                selectedBooking = null;
+                selectedBookingCard = null;
+            } else {
+                showAlert("Please select a booking card first.");
             }
         });
         btnRefresh.setOnAction(e -> refreshBookingList());
 
         HBox toolbar = new HBox(10, btnBook, btnCheckIn, btnCheckOut, btnRefresh);
-        toolbar.setPadding(new Insets(10));
         toolbar.setAlignment(Pos.CENTER_LEFT);
-        toolbar.setStyle("-fx-background-color: #16213e;");
+        toolbar.setPadding(new Insets(0, 0, 10, 0));
 
-        VBox layout = new VBox(10, headerLabel("📋 Booking Management"), toolbar, table);
-        VBox.setVgrow(table, Priority.ALWAYS);
-        layout.setPadding(new Insets(15));
-        layout.setStyle("-fx-background-color: #1a1a2e;");
-        tab.setContent(layout);
-        return tab;
+        VBox layout = new VBox(15, headerLabel("Booking Management"), toolbar, scroll);
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+        layout.setPadding(new Insets(40));
+        return layout;
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // TAB 5 — THREAD MONITOR (Live thread state viewer)
-    // ═══════════════════════════════════════════════════════════════════
-    private Tab buildThreadMonitorTab() {
-        Tab tab = new Tab("🧵 Threads");
+    private HBox createBookingCard(Booking b) {
+        HBox card = new HBox(20);
+        card.getStyleClass().add("dashboard-card");
+        card.setPadding(new Insets(15));
+        card.setAlignment(Pos.CENTER_LEFT);
+        
+        VBox col1 = new VBox(5, 
+            new Label("Booking ID: " + b.getBookingId()) {{ setStyle("-fx-font-weight: bold; -fx-text-fill: #1A3626;"); }},
+            new Label("Guest ID: " + b.getGuestId()) {{ setStyle("-fx-text-fill: #9CAEA5;"); }},
+            new Label("Room ID: " + b.getRoomId()) {{ setStyle("-fx-text-fill: #9CAEA5;"); }}
+        );
+        col1.setPrefWidth(180);
 
+        VBox col2 = new VBox(5, 
+            new Label("Check-In: " + b.getCheckInDate()) {{ setStyle("-fx-font-weight: bold; -fx-text-fill: #1A3626;"); }},
+            new Label("Check-Out: " + b.getCheckOutDate()) {{ setStyle("-fx-font-weight: bold; -fx-text-fill: #1A3626;"); }},
+            new Label(b.getNumberOfNights() + " Nights") {{ setStyle("-fx-text-fill: #9CAEA5;"); }}
+        );
+        col2.setPrefWidth(180);
+
+        Label lblStatus = new Label(b.getPaymentStatus().getDisplayName());
+        String statusColor = b.getPaymentStatus().name().equals("PAID") ? "#2ECC71" : "#E74C3C";
+        lblStatus.setStyle("-fx-background-color: " + statusColor + "; -fx-text-fill: white; -fx-padding: 5 12; -fx-background-radius: 12; -fx-font-weight: bold; -fx-font-size: 11px;");
+        
+        Label lblAmount = new Label("Rs. " + String.format("%.2f", b.getTotalAmount()));
+        lblAmount.setStyle("-fx-font-weight: bold; -fx-font-size: 16px; -fx-text-fill: #D4AF37;");
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        card.getChildren().addAll(col1, col2, spacer, lblStatus, lblAmount);
+        
+        card.setOnMouseClicked(e -> {
+            if (selectedBookingCard != null) selectedBookingCard.setStyle("");
+            selectedBookingCard = card;
+            selectedBooking = b;
+            card.setStyle("-fx-border-color: #1A3626; -fx-border-width: 2;");
+        });
+        return card;
+    }
+
+    // THREAD MONITOR VIEW
+    private Region buildThreadMonitorView() {
         Label info = new Label(
             "Live thread states (from Thread.getState()).\n"
           + "Each thread uses a different synchronization mechanism — see below.\n");
-        info.setStyle("-fx-text-fill: #aaaaaa; -fx-font-size: 12px;");
+        info.setStyle("-fx-text-fill: #9CAEA5; -fx-font-size: 13px;");
 
         GridPane grid = new GridPane();
-        grid.setHgap(20); grid.setVgap(12); grid.setPadding(new Insets(15));
+        grid.setHgap(20); grid.setVgap(12); grid.setPadding(new Insets(20));
+        grid.getStyleClass().add("dashboard-card");
 
         String[][] threads = {
-            {"CheckoutReminderThread", "synchronized block (intrinsic lock on PriorityQueue)",  "#e74c3c"},
-            {"AutoSaveThread",         "ReentrantLock + tryLock(3s) + daemon thread",            "#f39c12"},
-            {"OccupancyReporter",      "ScheduledExecutorService + ConcurrentHashMap + AtomicInteger", "#2ecc71"},
-            {"BookingProcessor",       "wait() / notifyAll() — Producer-Consumer pattern",        "#3498db"},
-            {"RoomStatusUpdater",      "volatile boolean — cross-thread visibility",              "#9b59b6"},
+            {"CheckoutReminderThread", "synchronized block (intrinsic lock on PriorityQueue)",  "#E74C3C"},
+            {"AutoSaveThread",         "ReentrantLock + tryLock(3s) + daemon thread",            "#D4AF37"},
+            {"OccupancyReporter",      "ScheduledExecutorService + ConcurrentHashMap + AtomicInteger", "#2ECC71"},
+            {"BookingProcessor",       "wait() / notifyAll() — Producer-Consumer pattern",        "#1A3626"},
+            {"RoomStatusUpdater",      "volatile boolean — cross-thread visibility",              "#9B59B6"},
         };
 
         grid.add(boldLabel("Thread Name"),        0, 0);
@@ -366,15 +471,13 @@ public class MainWindow {
             Label name  = new Label(threads[i][0]);
             Label mech  = new Label(threads[i][1]);
             Label state = new Label("● RUNNING");
-            name.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
-            mech.setStyle("-fx-text-fill: #aaaaaa; -fx-font-size: 11px;");
+            name.setStyle("-fx-text-fill: #1A3626; -fx-font-weight: bold;");
+            mech.setStyle("-fx-text-fill: #9CAEA5; -fx-font-size: 12px;");
             state.setStyle("-fx-text-fill: " + threads[i][2] + "; -fx-font-weight: bold;");
             grid.add(name, 0, i+1);
             grid.add(mech, 1, i+1);
             grid.add(state, 2, i+1);
         }
-
-        grid.setStyle("-fx-background-color: #16213e; -fx-background-radius: 8;");
 
         Label syncSummary = new Label(
             "\nSynchronization primitives used in this project:\n"
@@ -386,25 +489,23 @@ public class MainWindow {
           + "  6. wait() / notifyAll() — monitor object, producer-consumer\n"
           + "  7. volatile             — memory visibility across CPU caches\n"
         );
-        syncSummary.setStyle("-fx-text-fill: #aaaaaa; -fx-font-family: monospace; -fx-font-size: 12px;");
+        syncSummary.setStyle("-fx-text-fill: #9CAEA5; -fx-font-family: monospace; -fx-font-size: 13px;");
 
-        VBox layout = new VBox(15,
-                headerLabel("🧵 Thread Monitor"),
-                info, grid, syncSummary);
-        layout.setPadding(new Insets(20));
-        layout.setStyle("-fx-background-color: #1a1a2e;");
-        tab.setContent(layout);
-        return tab;
+        VBox layout = new VBox(15, headerLabel("Thread Monitor"), info, grid, syncSummary);
+        layout.setPadding(new Insets(40));
+        
+        ScrollPane sp = new ScrollPane(layout);
+        sp.setFitToWidth(true);
+        sp.setStyle("-fx-background-color: transparent; -fx-background: #FAFAFA;");
+        return sp;
     }
 
-    // ═══════════════════════════════════════════════════════════════════
     // DIALOGS
-    // ═══════════════════════════════════════════════════════════════════
-
     private void showAddRoomDialog() {
         Dialog<Room> dlg = new Dialog<>();
         dlg.setTitle("Add New Room");
         dlg.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        dlg.getDialogPane().getStyleClass().add("dialog-pane");
 
         GridPane grid = dialogGrid();
         TextField fId    = styledField("e.g. R301");
@@ -417,9 +518,9 @@ public class MainWindow {
         CheckBox fBreakfast = new CheckBox("Breakfast Included");
         CheckBox fButler    = new CheckBox("Butler Service");
         CheckBox fMinibar   = new CheckBox("Minibar Access");
-        fBreakfast.setStyle("-fx-text-fill: white;");
-        fButler.setStyle("-fx-text-fill: white;");
-        fMinibar.setStyle("-fx-text-fill: white;");
+        fBreakfast.setStyle("-fx-text-fill: #1A3626;");
+        fButler.setStyle("-fx-text-fill: #1A3626;");
+        fMinibar.setStyle("-fx-text-fill: #1A3626;");
 
         grid.addRow(0, lbl("Room ID:"), fId);
         grid.addRow(1, lbl("Floor:"),   fFloor);
@@ -430,7 +531,6 @@ public class MainWindow {
         grid.addRow(6, new Label(), fButler);
         grid.addRow(7, new Label(), fMinibar);
         dlg.getDialogPane().setContent(grid);
-        dlg.getDialogPane().setStyle("-fx-background-color: #1a1a2e;");
 
         dlg.setResultConverter(btn -> {
             if (btn == ButtonType.OK) {
@@ -473,6 +573,7 @@ public class MainWindow {
         Dialog<Guest> dlg = new Dialog<>();
         dlg.setTitle("Register New Guest");
         dlg.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        dlg.getDialogPane().getStyleClass().add("dialog-pane");
 
         GridPane grid = dialogGrid();
         TextField fId    = styledField("e.g. G001");
@@ -491,7 +592,6 @@ public class MainWindow {
         grid.addRow(5, lbl("ID Type:"),   fIdType);
         grid.addRow(6, lbl("ID Number:"), fIdNum);
         dlg.getDialogPane().setContent(grid);
-        dlg.getDialogPane().setStyle("-fx-background-color: #1a1a2e;");
 
         dlg.setResultConverter(btn -> {
             if (btn == ButtonType.OK) {
@@ -518,6 +618,7 @@ public class MainWindow {
         Dialog<Void> dlg = new Dialog<>();
         dlg.setTitle("Book a Room");
         dlg.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        dlg.getDialogPane().getStyleClass().add("dialog-pane");
 
         GridPane grid = dialogGrid();
         TextField   fGuestId  = styledField("Guest ID");
@@ -530,7 +631,6 @@ public class MainWindow {
         grid.addRow(2, lbl("Check-In:"),   fCheckIn);
         grid.addRow(3, lbl("Check-Out:"),  fCheckOut);
         dlg.getDialogPane().setContent(grid);
-        dlg.getDialogPane().setStyle("-fx-background-color: #1a1a2e;");
 
         dlg.setResultConverter(btn -> {
             if (btn == ButtonType.OK) {
@@ -545,16 +645,12 @@ public class MainWindow {
         dlg.showAndWait();
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // PUBLIC CALLBACKS (called by threads via Platform.runLater)
-    // ═══════════════════════════════════════════════════════════════════
-
-    /** Called by OccupancyReporterThread every 30 seconds */
+    // PUBLIC CALLBACKS
     public void updateDashboard(ConcurrentHashMap<String, Double> data) {
-        lblTotal.setText("Total: " + data.getOrDefault("total", 0.0).intValue());
-        lblAvailable.setText("Available: " + data.getOrDefault("available", 0.0).intValue());
-        lblOccupied.setText("Occupied: " + data.getOrDefault("occupied", 0.0).intValue());
-        lblRevenue.setText("Revenue: Rs." + String.format("%,.0f", data.getOrDefault("revenue", 0.0)));
+        lblTotal.setText("Total Rooms\n" + data.getOrDefault("total", 0.0).intValue());
+        lblAvailable.setText("Available\n" + data.getOrDefault("available", 0.0).intValue());
+        lblOccupied.setText("Occupied\n" + data.getOrDefault("occupied", 0.0).intValue());
+        lblRevenue.setText("Revenue\nRs. " + String.format("%,.0f", data.getOrDefault("revenue", 0.0)));
 
         chartSeries.getData().clear();
         chartSeries.getData().addAll(
@@ -564,32 +660,26 @@ public class MainWindow {
         );
     }
 
-    /** Called by CheckoutReminderThread — shows red alert banner */
     public void showAlert(String message) {
         alertBanner.setText(message);
         alertBanner.setVisible(true);
     }
 
-    /** Called by BookingProcessorThread with result of async booking */
     public void showBookingResult(String result) {
         Alert alert = new Alert(result.startsWith("SUCCESS")
                 ? Alert.AlertType.INFORMATION : Alert.AlertType.ERROR);
         alert.setTitle("Booking Result");
         alert.setHeaderText(null);
         alert.setContentText(result);
-        alert.getDialogPane().setStyle("-fx-background-color: #1a1a2e; -fx-text-fill: white;");
+        alert.getDialogPane().getStyleClass().add("dialog-pane");
         alert.showAndWait();
     }
 
-    /** Called by RoomStatusUpdaterThread */
     public void refreshRoomTable() {
         roomList.setAll(roomRepo.getAllSorted());
     }
 
-    // ═══════════════════════════════════════════════════════════════════
     // HELPERS
-    // ═══════════════════════════════════════════════════════════════════
-
     private void refreshAllLists() {
         roomList.setAll(roomRepo.getAllSorted());
         guestList.setAll(guestRepo.getAll());
@@ -614,74 +704,57 @@ public class MainWindow {
     }
 
     private void roomFileManager_write(int idx, Room room) {
-        // Write to RAF via BookingService's registered index
         bookingService.registerRoomIndex(room.getRoomId(), idx);
     }
 
-    @SuppressWarnings("unchecked")
-    private <T> TableColumn<T, String> col(String title, String prop) {
-        TableColumn<T, String> c = new TableColumn<>(title);
-        c.setCellValueFactory(new PropertyValueFactory<>(prop));
-        c.setStyle("-fx-text-fill: white;");
-        return c;
-    }
-
-    private Label statCard(String title, String value, String color) {
+    private Label statCard(String title, String value) {
         Label l = new Label(title + "\n" + value);
-        l.setStyle("-fx-background-color: " + color + "33; -fx-text-fill: white; "
-                + "-fx-font-size: 15px; -fx-font-weight: bold; -fx-padding: 15 25; "
-                + "-fx-background-radius: 10; -fx-border-color: " + color + "; "
-                + "-fx-border-radius: 10;");
-        l.setMinWidth(160);
-        l.setAlignment(Pos.CENTER);
+        l.getStyleClass().add("stat-card");
+        l.setStyle("-fx-text-fill: #1A3626; -fx-font-size: 18px; -fx-font-weight: bold;");
+        l.setMinWidth(180);
+        l.setAlignment(Pos.CENTER_LEFT);
         return l;
     }
 
     private Label headerLabel(String text) {
         Label l = new Label(text);
-        l.setFont(Font.font("System", FontWeight.BOLD, 20));
-        l.setTextFill(Color.WHITE);
+        l.getStyleClass().add("header-label");
         return l;
     }
 
     private Label boldLabel(String text) {
         Label l = new Label(text);
-        l.setStyle("-fx-text-fill: #f0f0f0; -fx-font-weight: bold; -fx-font-size: 12px;");
+        l.setStyle("-fx-text-fill: #1A3626; -fx-font-weight: bold; -fx-font-size: 14px;");
         return l;
     }
 
-    private Button actionButton(String text, String color) {
+    private Button actionButton(String text, String colorHex) {
         Button b = new Button(text);
-        b.setStyle("-fx-background-color: " + color + "; -fx-text-fill: white; "
-                + "-fx-font-weight: bold; -fx-background-radius: 5; -fx-cursor: hand;");
+        b.getStyleClass().add("button");
+        if ("#D4AF37".equals(colorHex)) {
+            b.getStyleClass().add("button-gold");
+        } else if ("#E74C3C".equals(colorHex)) {
+            b.setStyle("-fx-background-color: #8B0000; -fx-text-fill: white;");
+        }
         return b;
     }
 
     private TextField styledField(String prompt) {
         TextField f = new TextField();
         f.setPromptText(prompt);
-        f.setStyle("-fx-background-color: #16213e; -fx-text-fill: white; "
-                + "-fx-prompt-text-fill: grey; -fx-border-color: #3498db; -fx-border-radius: 4;");
-        f.setMinWidth(200);
+        f.setPrefWidth(220);
         return f;
     }
 
     private GridPane dialogGrid() {
         GridPane g = new GridPane();
-        g.setHgap(12); g.setVgap(10); g.setPadding(new Insets(15));
-        g.setStyle("-fx-background-color: #1a1a2e;");
+        g.setHgap(12); g.setVgap(12); g.setPadding(new Insets(20));
         return g;
     }
 
     private Label lbl(String text) {
         Label l = new Label(text);
-        l.setStyle("-fx-text-fill: #aaaaaa;");
+        l.setStyle("-fx-text-fill: #2C3E50; -fx-font-weight: bold;");
         return l;
-    }
-
-    private void styleLabels(HBox box) {
-        box.getChildren().stream()
-           .filter(n -> n instanceof Label)
-           .forEach(n -> ((Label)n).setStyle("-fx-text-fill: white;"));
     }
 }
