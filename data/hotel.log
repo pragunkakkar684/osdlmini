@@ -112,3 +112,46 @@
 [2026-03-30 22:40:33] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
 [2026-03-30 22:41:03] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
 [2026-03-30 22:41:33] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:12:38] [INFO ] Data loaded: 3 rooms, 2 guests, 2 bookings.
+[2026-03-31 09:12:38] [INFO ] CheckoutReminderThread started.
+[2026-03-31 09:12:38] [INFO ] AutoSaveThread started (daemon=true).
+[2026-03-31 09:12:38] [INFO ] OccupancyReporterThread (ScheduledExecutorService) started.
+[2026-03-31 09:12:38] [INFO ] BookingProcessorThread started (Producer-Consumer).
+[2026-03-31 09:12:38] [INFO ] All 5 background threads started.
+[2026-03-31 09:12:38] [INFO ] RoomStatusUpdaterThread started. Monitoring RAF file.
+[2026-03-31 09:12:38] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:12:40] [INFO ] Application started successfully.
+[2026-03-31 09:13:08] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:13:38] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:14:08] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:14:38] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:15:08] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:15:38] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:16:08] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:16:38] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:17:08] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:17:38] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:17:38] [INFO ] AutoSave completed successfully.
+[2026-03-31 09:18:08] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:18:38] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:19:08] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:19:38] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:20:08] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:20:38] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:21:08] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:21:38] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:22:08] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:22:38] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:22:38] [INFO ] AutoSave completed successfully.
+[2026-03-31 09:23:08] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:23:38] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:24:08] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:24:38] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:25:08] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:25:38] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:26:08] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:26:38] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:27:08] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:27:38] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
+[2026-03-31 09:27:38] [INFO ] AutoSave completed successfully.
+[2026-03-31 09:28:08] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.11414.00
