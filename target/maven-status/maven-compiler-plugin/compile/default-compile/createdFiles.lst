@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 com\hotel\model\Room.class
 com\hotel\repository\BookingRepository.class
 com\hotel\model\StandardRoom.class
@@ -33,3 +34,5 @@ com\hotel\threads\RoomStatusUpdaterThread.class
 com\hotel\interfaces\Billable.class
 com\hotel\service\BookingService.class
 com\hotel\ui\MainWindow$5.class
+=======
+>>>>>>> 45566472ecea61d8467914fdfa4c42796141ae5c
