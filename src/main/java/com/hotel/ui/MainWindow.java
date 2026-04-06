@@ -15,16 +15,15 @@ import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.chart.BarChart;
-import javafx.scene.chart.CategoryAxis;
-import javafx.scene.chart.NumberAxis;
-import javafx.scene.chart.XYChart;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -50,8 +49,6 @@ public class MainWindow {
 
     private Label lblTotal, lblAvailable, lblOccupied, lblRevenue;
     private Label alertBanner;
-    private BarChart<String, Number> occupancyChart;
-    private XYChart.Series<String, Number> chartSeries;
 
     public MainWindow(RoomRepository roomRepo, GuestRepository guestRepo,
                       BookingRepository bookingRepo, BookingService bookingService,
@@ -73,16 +70,16 @@ public class MainWindow {
         sidebar.getStyleClass().add("sidebar");
         sidebar.setPrefWidth(260);
 
-        Label brand = new Label("🌿 The Fern");
+        Label brand = new Label("The Fern Hotel");
         brand.getStyleClass().add("sidebar-brand");
         VBox.setMargin(brand, new Insets(40, 0, 40, 30));
 
         ToggleGroup navGroup = new ToggleGroup();
-        ToggleButton navDash    = navButton("📊 Dashboard", navGroup);
-        ToggleButton navRooms   = navButton("🛏 Rooms", navGroup);
-        ToggleButton navGuests  = navButton("👤 Guests", navGroup);
-        ToggleButton navBooks   = navButton("📋 Bookings", navGroup);
-        ToggleButton navThreads = navButton("🧵 Threads", navGroup);
+        ToggleButton navDash    = navButton("Dashboard", navGroup);
+        ToggleButton navRooms   = navButton("Rooms", navGroup);
+        ToggleButton navGuests  = navButton("Guests", navGroup);
+        ToggleButton navBooks   = navButton("Bookings", navGroup);
+        ToggleButton navThreads = navButton("Threads", navGroup);
 
         sidebar.getChildren().addAll(brand, navDash, navRooms, navGuests, navBooks, navThreads);
 
@@ -111,6 +108,7 @@ public class MainWindow {
                 + "-fx-font-size: 13px; -fx-padding: 10 20; -fx-font-weight: bold;");
         alertBanner.setMaxWidth(Double.MAX_VALUE);
         alertBanner.setVisible(false);
+        alertBanner.managedProperty().bind(alertBanner.visibleProperty());
 
         mainContainer.setTop(alertBanner);
         mainContainer.setLeft(sidebar);
@@ -146,18 +144,14 @@ public class MainWindow {
         statsRow.setPadding(new Insets(15, 0, 15, 0));
         statsRow.setAlignment(Pos.CENTER_LEFT);
 
-        CategoryAxis xAxis = new CategoryAxis();
-        NumberAxis   yAxis = new NumberAxis();
-        xAxis.setLabel("Status");
-        yAxis.setLabel("Count");
-        occupancyChart = new BarChart<>(xAxis, yAxis);
-        occupancyChart.setTitle("Room Occupancy Overview");
-        occupancyChart.setMinHeight(300);
-        chartSeries = new XYChart.Series<>();
-        chartSeries.setName("Rooms");
-        occupancyChart.getData().add(chartSeries);
+        VBox summaryCard = new VBox(8,
+            boldLabel("Operational Summary"),
+            new Label("Track room availability, occupancy, and total revenue in real time."),
+            new Label("Use the Rooms and Bookings sections for day-to-day operations."));
+        summaryCard.getStyleClass().add("dashboard-card");
+        summaryCard.setPadding(new Insets(20));
 
-        VBox layout = new VBox(20, headerLabel("Dashboard"), statsRow, occupancyChart);
+        VBox layout = new VBox(20, headerLabel("Dashboard"), statsRow, summaryCard);
         layout.setPadding(new Insets(40));
         
         ScrollPane sp = new ScrollPane(layout);
@@ -180,9 +174,9 @@ public class MainWindow {
             else { roomList.setAll(roomRepo.getByType(RoomType.valueOf(sel.toUpperCase()))); }
         });
 
-        Button btnAdd      = actionButton("➕ Add Room",    null);
-        Button btnMaint    = actionButton("🔧 Maintenance", "#D4AF37");
-        Button btnRefresh  = actionButton("🔄 Refresh",     null);
+        Button btnAdd      = actionButton("Add Room",    null);
+        Button btnMaint    = actionButton("Maintenance", "#D4AF37");
+        Button btnRefresh  = actionButton("Refresh",     null);
         
         for (Room r : roomList) { grid.getChildren().add(createRoomCard(r, btnMaint)); }
         roomList.addListener((ListChangeListener.Change<? extends Room> c) -> {
@@ -210,7 +204,7 @@ public class MainWindow {
                 refreshRoomTable();
                 selectedRoom = null;
                 selectedRoomCard = null;
-                btnMaint.setText("🔧 Maintenance");
+                btnMaint.setText("Maintenance");
                 btnMaint.setStyle("-fx-background-color: #D4AF37; -fx-text-fill: white;");
             } else {
                 showAlert("Please select a room card first.");
@@ -266,10 +260,10 @@ public class MainWindow {
             card.setStyle("-fx-border-color: #1A3626; -fx-border-width: 2;");
             
             if (r.getStatus() == RoomStatus.MAINTENANCE) {
-                btnMaint.setText("✅ End Maint");
+                btnMaint.setText("End Maintenance");
                 btnMaint.setStyle("-fx-background-color: #2ECC71; -fx-text-fill: white;");
             } else {
-                btnMaint.setText("🔧 Maintenance");
+                btnMaint.setText("Maintenance");
                 btnMaint.setStyle("-fx-background-color: #D4AF37; -fx-text-fill: white;");
             }
         });
@@ -294,18 +288,18 @@ public class MainWindow {
         scroll.setStyle("-fx-background-color: transparent; -fx-background: #FAFAFA;");
 
         TextField searchField = new TextField();
-        searchField.setPromptText("Search by name, phone, ID...");
+        searchField.setPromptText("Search by name, phone, or ID");
         searchField.textProperty().addListener((obs, old, query) -> {
             if (query.isEmpty()) guestList.setAll(guestRepo.getAll());
             else guestList.setAll(guestRepo.search(query));
         });
 
-        Button btnAdd     = actionButton("➕ Register Guest", null);
-        Button btnRefresh = actionButton("🔄 Refresh",        null);
+        Button btnAdd     = actionButton("Register Guest", null);
+        Button btnRefresh = actionButton("Refresh",        null);
         btnAdd.setOnAction(e -> showAddGuestDialog());
         btnRefresh.setOnAction(e -> { guestList.setAll(guestRepo.getAll()); });
 
-        HBox toolbar = new HBox(10, boldLabel("🔍 Search: "), searchField, btnAdd, btnRefresh);
+        HBox toolbar = new HBox(10, boldLabel("Search:"), searchField, btnAdd, btnRefresh);
         toolbar.setAlignment(Pos.CENTER_LEFT);
         toolbar.setPadding(new Insets(0, 0, 10, 0));
 
@@ -362,10 +356,10 @@ public class MainWindow {
         scroll.setFitToWidth(true);
         scroll.setStyle("-fx-background-color: transparent; -fx-background: #FAFAFA;");
 
-        Button btnBook    = actionButton("📝 Book Room",  null);
-        Button btnCheckIn = actionButton("✅ Check-In",   null);
-        Button btnCheckOut= actionButton("🏁 Check-Out",  "#E74C3C");
-        Button btnRefresh = actionButton("🔄 Refresh",    null);
+        Button btnBook    = actionButton("Book Room",  null);
+        Button btnCheckIn = actionButton("Check-In",   null);
+        Button btnCheckOut= actionButton("Check-Out",  "#E74C3C");
+        Button btnRefresh = actionButton("Refresh",    null);
 
         btnBook.setOnAction(e -> showBookRoomDialog());
         btnCheckIn.setOnAction(e -> {
@@ -651,13 +645,6 @@ public class MainWindow {
         lblAvailable.setText("Available\n" + data.getOrDefault("available", 0.0).intValue());
         lblOccupied.setText("Occupied\n" + data.getOrDefault("occupied", 0.0).intValue());
         lblRevenue.setText("Revenue\nRs. " + String.format("%,.0f", data.getOrDefault("revenue", 0.0)));
-
-        chartSeries.getData().clear();
-        chartSeries.getData().addAll(
-            new XYChart.Data<>("Available", data.getOrDefault("available", 0.0)),
-            new XYChart.Data<>("Booked",    data.getOrDefault("booked",    0.0)),
-            new XYChart.Data<>("Occupied",  data.getOrDefault("occupied",  0.0))
-        );
     }
 
     public void showAlert(String message) {
@@ -698,8 +685,38 @@ public class MainWindow {
             String rDesc = r.map(Room::toString).orElse("Unknown");
             String path  = invoiceExporter.exportInvoice(b, gName, rDesc, b.getTotalAmount());
             showBookingResult("SUCCESS: Invoice saved to:\n" + path);
+            showInvoicePreview(path);
         } catch (Exception ex) {
             logger.error("Invoice error: " + ex.getMessage());
+        }
+    }
+
+    private void showInvoicePreview(String invoicePath) {
+        try {
+            String invoiceText = Files.readString(Path.of(invoicePath), StandardCharsets.UTF_8);
+
+            Dialog<Void> dlg = new Dialog<>();
+            dlg.setTitle("Invoice Preview");
+            dlg.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+            dlg.getDialogPane().getStyleClass().add("dialog-pane");
+
+            TextArea invoiceArea = new TextArea(invoiceText);
+            invoiceArea.setEditable(false);
+            invoiceArea.setWrapText(false);
+            invoiceArea.setStyle("-fx-font-family: 'Consolas', monospace; -fx-font-size: 12px;");
+            invoiceArea.setPrefSize(700, 420);
+
+            VBox content = new VBox(10,
+                    boldLabel("Generated Invoice"),
+                    invoiceArea,
+                    new Label("File: " + invoicePath));
+            content.setPadding(new Insets(16));
+
+            dlg.getDialogPane().setContent(content);
+            dlg.showAndWait();
+        } catch (Exception ex) {
+            logger.error("Invoice preview error: " + ex.getMessage());
+            showBookingResult("ERROR: Invoice created but preview could not be opened.");
         }
     }
 

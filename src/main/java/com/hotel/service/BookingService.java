@@ -9,6 +9,7 @@ import com.hotel.repository.BookingRepository;
 import com.hotel.repository.RoomRepository;
 
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -99,10 +100,11 @@ public class BookingService {
     public synchronized String checkIn(String bookingId) {
         Optional<Booking> bOpt = bookingRepo.findById(bookingId);
         if (bOpt.isEmpty())        return "ERROR: Booking not found.";
-        if (bOpt.get().isCheckedIn()) return "ERROR: Already checked in.";
+        if (bOpt.get().isCheckedIn())  return "ERROR: Already checked in.";
+        if (bOpt.get().isCheckedOut()) return "ERROR: Booking already checked out.";
 
         Booking booking = bOpt.get();
-        booking.doCheckIn();
+        booking.doCheckIn(LocalDate.now());
 
         roomRepo.findById(booking.getRoomId()).ifPresent(r -> {
             r.setStatus(RoomStatus.OCCUPIED);
@@ -118,14 +120,18 @@ public class BookingService {
         Optional<Booking> bOpt = bookingRepo.findById(bookingId);
         if (bOpt.isEmpty())          return "ERROR: Booking not found.";
         if (bOpt.get().isCheckedOut()) return "ERROR: Already checked out.";
+        if (!bOpt.get().isCheckedIn()) return "ERROR: Please check in before checkout.";
 
         Booking booking = bOpt.get();
         Optional<Room> roomOpt = roomRepo.findById(booking.getRoomId());
         if (roomOpt.isEmpty()) return "ERROR: Room data missing.";
 
         Room room = roomOpt.get();
+        int billableNights = calculateBillableNights(booking);
+        booking.setNumberOfNights((long) billableNights);
+
         // Polymorphism in action — calculateRate() dispatched to correct subclass
-        double total = room.calculateRate(booking.getNumberOfNights().intValue(), true);
+        double total = room.calculateRate(billableNights, true);
 
         booking.doCheckOut(total);
         room.setStatus(RoomStatus.AVAILABLE);
@@ -134,6 +140,15 @@ public class BookingService {
         logger.info("Checkout: Booking=" + bookingId
                 + " Amount=Rs." + String.format("%.2f", total));
         return "SUCCESS: Checkout complete. Total: Rs." + String.format("%.2f", total);
+    }
+
+    private int calculateBillableNights(Booking booking) {
+        LocalDate billedCheckIn = booking.getActualCheckInDate() != null
+                ? booking.getActualCheckInDate()
+                : booking.getCheckInDate();
+
+        long nights = ChronoUnit.DAYS.between(billedCheckIn, booking.getCheckOutDate());
+        return (int) Math.max(1, nights);
     }
 
     /** Update room status in the RandomAccessFile in-place */

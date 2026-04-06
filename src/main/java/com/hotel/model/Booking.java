@@ -38,6 +38,7 @@ public class Booking implements Serializable, Billable, Comparable<Booking> {
     private Long          numberOfNights; // Wrapper class
     private boolean       checkedIn;
     private boolean       checkedOut;
+    private LocalDate     actualCheckInDate;
 
     public Booking(String bookingId, String guestId, String roomId,
                    LocalDate checkInDate, LocalDate checkOutDate) {
@@ -50,6 +51,7 @@ public class Booking implements Serializable, Billable, Comparable<Booking> {
         this.totalAmount   = 0.0;
         this.checkedIn     = false;
         this.checkedOut    = false;
+        this.actualCheckInDate = null;
 
         // ChronoUnit.DAYS calculates the number of days between two LocalDates
         this.numberOfNights = ChronoUnit.DAYS.between(checkInDate, checkOutDate);
@@ -61,7 +63,13 @@ public class Booking implements Serializable, Billable, Comparable<Booking> {
 
     /** Called when guest physically arrives at the hotel */
     public void doCheckIn() {
+        doCheckIn(LocalDate.now());
+    }
+
+    /** Called when guest physically arrives at the hotel with an explicit date */
+    public void doCheckIn(LocalDate checkInDate) {
         this.checkedIn = true;
+        this.actualCheckInDate = checkInDate;
     }
 
     /** Called at checkout — finalises the amount and marks payment done */
@@ -131,6 +139,9 @@ public class Booking implements Serializable, Billable, Comparable<Booking> {
 
     public boolean       isCheckedOut()                          { return checkedOut; }
     public void          setCheckedOut(boolean checkedOut)       { this.checkedOut = checkedOut; }
+
+    public LocalDate     getActualCheckInDate()                  { return actualCheckInDate; }
+    public void          setActualCheckInDate(LocalDate date)    { this.actualCheckInDate = date; }
 
     @Override
     public String toString() { return generateInvoiceSummary(); }
