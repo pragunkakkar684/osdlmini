@@ -15,36 +15,36 @@ import java.util.function.Consumer;
  *
  * ─────────────────────────────────────────────────────────
  * MULTITHREADING:
- *   implements Runnable  — separates the task from the thread.
- *   Started via: Thread t = new Thread(runnable); t.start();
- *   This is preferred over extending Thread directly.
+ * implements Runnable — separates the task from the thread.
+ * Started via: Thread t = new Thread(runnable); t.start();
+ * This is preferred over extending Thread directly.
  *
  * SYNCHRONIZATION: synchronized block on PriorityQueue
- *   PriorityQueue is NOT thread-safe. If CheckoutReminderThread
- *   reads from it while BookingService adds to it, data can corrupt.
- *   The synchronized(queue) block acquires the INTRINSIC LOCK on that
- *   specific object — only one thread can hold it at a time.
+ * PriorityQueue is NOT thread-safe. If CheckoutReminderThread
+ * reads from it while BookingService adds to it, data can corrupt.
+ * The synchronized(queue) block acquires the INTRINSIC LOCK on that
+ * specific object — only one thread can hold it at a time.
  *
  * THREAD LIFECYCLE:
- *   NEW → (start()) → RUNNABLE → (sleep) → TIMED_WAITING → RUNNABLE → ...
- *   On interrupt → TERMINATED
+ * NEW → (start()) → RUNNABLE → (sleep) → TIMED_WAITING → RUNNABLE → ...
+ * On interrupt → TERMINATED
  * ─────────────────────────────────────────────────────────
  */
 public class CheckoutReminderThread implements Runnable {
 
     private final BookingRepository bookingRepository;
-    private final LogManager        logger;
-    private final Consumer<String>  alertCallback; // sends message to JavaFX UI thread
-    private final AtomicInteger      scanCount = new AtomicInteger(0);
-    private volatile int             lastDueTodayCount = 0;
-    private volatile long            lastScanMillis = -1;
+    private final LogManager logger;
+    private final Consumer<String> alertCallback; // sends message to JavaFX UI thread
+    private final AtomicInteger scanCount = new AtomicInteger(0);
+    private volatile int lastDueTodayCount = 0;
+    private volatile long lastScanMillis = -1;
 
     public CheckoutReminderThread(BookingRepository bookingRepo,
-                                  LogManager logger,
-                                  Consumer<String> alertCallback) {
+            LogManager logger,
+            Consumer<String> alertCallback) {
         this.bookingRepository = bookingRepo;
-        this.logger            = logger;
-        this.alertCallback     = alertCallback;
+        this.logger = logger;
+        this.alertCallback = alertCallback;
     }
 
     @Override

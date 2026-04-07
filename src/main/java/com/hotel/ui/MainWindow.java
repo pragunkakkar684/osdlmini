@@ -110,14 +110,14 @@ public class MainWindow {
     }
 
     public void setThreadMonitorContext(Thread reminderThread,
-                                        Thread autoSaveThread,
-                                        Thread bookingProcessorThread,
-                                        Thread statusUpdaterThread,
-                                        CheckoutReminderThread reminderTask,
-                                        AutoSaveThread autoSaveTask,
-                                        OccupancyReporterThread occupancyReporter,
-                                        BookingProcessorThread bookingProcessorTask,
-                                        RoomStatusUpdaterThread statusUpdaterTask) {
+            Thread autoSaveThread,
+            Thread bookingProcessorThread,
+            Thread statusUpdaterThread,
+            CheckoutReminderThread reminderTask,
+            AutoSaveThread autoSaveTask,
+            OccupancyReporterThread occupancyReporter,
+            BookingProcessorThread bookingProcessorTask,
+            RoomStatusUpdaterThread statusUpdaterTask) {
         this.reminderThreadRef = reminderThread;
         this.autoSaveThreadRef = autoSaveThread;
         this.bookingProcessorThreadRef = bookingProcessorThread;
@@ -686,7 +686,8 @@ public class MainWindow {
             int alive = 0;
             int daemon = 0;
 
-            Thread[] threads = { reminderThreadRef, autoSaveThreadRef, bookingProcessorThreadRef, statusUpdaterThreadRef };
+            Thread[] threads = { reminderThreadRef, autoSaveThreadRef, bookingProcessorThreadRef,
+                    statusUpdaterThreadRef };
             for (Thread thread : threads) {
                 if (thread == null) {
                     continue;
@@ -726,7 +727,8 @@ public class MainWindow {
         int scanCount = reminderTaskRef != null ? reminderTaskRef.getScanCount() : 0;
         int dueToday = reminderTaskRef != null ? reminderTaskRef.getLastDueTodayCount() : 0;
         detail.setText(String.format("Scans: %d | Due today: %d | Last scan: %s",
-                scanCount, dueToday, formatTimeAgo(reminderTaskRef != null ? reminderTaskRef.getLastScanMillis() : -1)));
+                scanCount, dueToday,
+                formatTimeAgo(reminderTaskRef != null ? reminderTaskRef.getLastScanMillis() : -1)));
     }
 
     private void updateAutoSaveCard() {
@@ -754,12 +756,18 @@ public class MainWindow {
             return;
         }
 
-        Thread.State reporterState = occupancyReporterRef != null ? occupancyReporterRef.getThreadState() : Thread.State.NEW;
-        state.setText("State: " + reporterState + ((occupancyReporterRef != null && occupancyReporterRef.isActive()) ? " | active" : " | idle"));
+        Thread.State reporterState = occupancyReporterRef != null ? occupancyReporterRef.getThreadState()
+                : Thread.State.NEW;
+        state.setText("State: " + reporterState
+                + ((occupancyReporterRef != null && occupancyReporterRef.isActive()) ? " | active" : " | idle"));
         usage.setText("Usage: recalculates occupancy and revenue every 30 seconds.");
         int reports = occupancyReporterRef != null ? occupancyReporterRef.getReportCount() : 0;
-        double occupancyPct = occupancyReporterRef != null ? occupancyReporterRef.getReportData().getOrDefault("occupancyPct", 0.0) : 0.0;
-        double revenue = occupancyReporterRef != null ? occupancyReporterRef.getReportData().getOrDefault("revenue", 0.0) : 0.0;
+        double occupancyPct = occupancyReporterRef != null
+                ? occupancyReporterRef.getReportData().getOrDefault("occupancyPct", 0.0)
+                : 0.0;
+        double revenue = occupancyReporterRef != null
+                ? occupancyReporterRef.getReportData().getOrDefault("revenue", 0.0)
+                : 0.0;
         detail.setText(String.format("Reports: %d | Occupancy: %.1f%% | Revenue: Rs. %,.0f | Last report: %s",
                 reports, occupancyPct, revenue,
                 formatTimeAgo(occupancyReporterRef != null ? occupancyReporterRef.getLastReportMillis() : -1)));
@@ -779,7 +787,8 @@ public class MainWindow {
         int processed = bookingProcessorTaskRef != null ? bookingProcessorTaskRef.getProcessedRequestCount() : 0;
         detail.setText(String.format("Pending queue: %d | Processed: %d | Last processed: %s",
                 pending, processed,
-                formatTimeAgo(bookingProcessorTaskRef != null ? bookingProcessorTaskRef.getLastProcessedMillis() : -1)));
+                formatTimeAgo(
+                        bookingProcessorTaskRef != null ? bookingProcessorTaskRef.getLastProcessedMillis() : -1)));
     }
 
     private void updateRoomStatusCard() {
@@ -945,9 +954,25 @@ public class MainWindow {
         dlg.setResultConverter(btn -> {
             if (btn == ButtonType.OK) {
                 try {
+                    String phone = fPhone.getText().trim();
+
+                    // Validate phone number is exactly 10 digits
+                    if (!isValidPhoneNumber(phone)) {
+                        showAlert("Phone number must be exactly 10 digits.");
+                        return null;
+                    }
+
+                    Integer age = Integer.valueOf(fAge.getText().trim());
+
+                    // Validate age is not less than 18
+                    if (!isValidAge(age)) {
+                        showAlert("Guest must be at least 18 years old to register.");
+                        return null;
+                    }
+
                     return new Guest(fId.getText().trim(), fName.getText().trim(),
-                            fPhone.getText().trim(), fEmail.getText().trim(),
-                            Integer.valueOf(fAge.getText().trim()),
+                            phone, fEmail.getText().trim(),
+                            age,
                             fIdType.getText().trim(), fIdNum.getText().trim());
                 } catch (Exception ex) {
                     return null;
@@ -1318,5 +1343,30 @@ public class MainWindow {
         Label l = new Label(text);
         l.setStyle("-fx-text-fill: #2C3E50; -fx-font-weight: bold;");
         return l;
+    }
+
+    /**
+     * Validates that the phone number is exactly 10 digits.
+     * Edge case: Phone numbers that are not 10 digits will be rejected,
+     * and the guest will not be registered.
+     */
+    private boolean isValidPhoneNumber(String phone) {
+        if (phone == null || phone.isEmpty()) {
+            return false;
+        }
+        // Check if phone number contains exactly 10 digits only
+        return phone.matches("\\d{10}");
+    }
+
+    /**
+     * Validates that the age is at least 18.
+     * Edge case: Guests under 18 years old will not be registered.
+     */
+    private boolean isValidAge(Integer age) {
+        if (age == null) {
+            return false;
+        }
+        // Age must be at least 18
+        return age >= 18;
     }
 }

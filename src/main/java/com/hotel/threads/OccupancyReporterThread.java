@@ -14,26 +14,27 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
- * Periodically recalculates occupancy and revenue, then pushes results to the UI.
+ * Periodically recalculates occupancy and revenue, then pushes results to the
+ * UI.
  *
  * ─────────────────────────────────────────────────────────
  * MULTITHREADING — ScheduledExecutorService:
- *   Instead of a manual Thread + sleep loop, we use a thread pool executor.
- *   scheduleAtFixedRate() runs compute() every 30 seconds automatically.
- *   The executor manages thread creation, lifecycle, and error handling.
+ * Instead of a manual Thread + sleep loop, we use a thread pool executor.
+ * scheduleAtFixedRate() runs compute() every 30 seconds automatically.
+ * The executor manages thread creation, lifecycle, and error handling.
  *
  * SYNCHRONIZATION 1 — ConcurrentHashMap:
- *   The reportData map is shared between the executor thread (writer)
- *   and the JavaFX thread (reader for dashboard display).
- *   ConcurrentHashMap handles concurrent access without any explicit lock.
- *   It uses fine-grained bucket-level locking — much better than a
- *   fully synchronized HashMap which locks the entire map for every operation.
+ * The reportData map is shared between the executor thread (writer)
+ * and the JavaFX thread (reader for dashboard display).
+ * ConcurrentHashMap handles concurrent access without any explicit lock.
+ * It uses fine-grained bucket-level locking — much better than a
+ * fully synchronized HashMap which locks the entire map for every operation.
  *
  * SYNCHRONIZATION 2 — AtomicInteger:
- *   totalBookingsProcessed is a shared counter updated by this thread.
- *   AtomicInteger uses hardware-level Compare-And-Swap (CAS) operations.
- *   incrementAndGet() is atomic — no synchronized block needed at all.
- *   Much lighter than a full lock for simple integer increments.
+ * totalBookingsProcessed is a shared counter updated by this thread.
+ * AtomicInteger uses hardware-level Compare-And-Swap (CAS) operations.
+ * incrementAndGet() is atomic — no synchronized block needed at all.
+ * Much lighter than a full lock for simple integer increments.
  * ─────────────────────────────────────────────────────────
  */
 public class OccupancyReporterThread {
@@ -44,9 +45,9 @@ public class OccupancyReporterThread {
     // AtomicInteger — lock-free thread-safe counter
     private final AtomicInteger totalBookingsProcessed = new AtomicInteger(0);
 
-    private final RoomRepository    roomRepo;
+    private final RoomRepository roomRepo;
     private final BookingRepository bookingRepo;
-    private final LogManager        logger;
+    private final LogManager logger;
 
     // Callback to push updated data to the JavaFX Dashboard UI
     private final Consumer<ConcurrentHashMap<String, Double>> uiCallback;
@@ -57,18 +58,19 @@ public class OccupancyReporterThread {
     private volatile long lastReportMillis = -1;
 
     public OccupancyReporterThread(RoomRepository roomRepo,
-                                   BookingRepository bookingRepo,
-                                   LogManager logger,
-                                   Consumer<ConcurrentHashMap<String, Double>> uiCallback) {
-        this.roomRepo   = roomRepo;
+            BookingRepository bookingRepo,
+            LogManager logger,
+            Consumer<ConcurrentHashMap<String, Double>> uiCallback) {
+        this.roomRepo = roomRepo;
         this.bookingRepo = bookingRepo;
-        this.logger     = logger;
+        this.logger = logger;
         this.uiCallback = uiCallback;
     }
 
     /**
      * Starts the scheduled executor.
-     * The thread factory gives the thread a readable name — visible in Thread Monitor UI.
+     * The thread factory gives the thread a readable name — visible in Thread
+     * Monitor UI.
      */
     public void start() {
         executor = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -85,12 +87,12 @@ public class OccupancyReporterThread {
 
     /** All stats calculations happen here — runs on the executor thread */
     private void compute() {
-        int    total       = roomRepo.count();
-        long   occupied    = roomRepo.countByStatus(RoomStatus.OCCUPIED);
-        long   booked      = roomRepo.countByStatus(RoomStatus.BOOKED);
-        long   available   = roomRepo.countByStatus(RoomStatus.AVAILABLE);
-        double revenue     = bookingRepo.getTotalRevenue();
-        double occupancyPct = total > 0 ? ((double)(occupied + booked) / total) * 100 : 0;
+        int total = roomRepo.count();
+        long occupied = roomRepo.countByStatus(RoomStatus.OCCUPIED);
+        long booked = roomRepo.countByStatus(RoomStatus.BOOKED);
+        long available = roomRepo.countByStatus(RoomStatus.AVAILABLE);
+        double revenue = bookingRepo.getTotalRevenue();
+        double occupancyPct = total > 0 ? ((double) (occupied + booked) / total) * 100 : 0;
 
         // AtomicInteger.incrementAndGet() — atomic, no synchronized block needed
         totalBookingsProcessed.incrementAndGet();
@@ -98,11 +100,11 @@ public class OccupancyReporterThread {
         lastReportMillis = System.currentTimeMillis();
 
         // ConcurrentHashMap.put() — thread-safe without any lock
-        reportData.put("total",      (double) total);
-        reportData.put("occupied",   (double) occupied);
-        reportData.put("booked",     (double) booked);
-        reportData.put("available",  (double) available);
-        reportData.put("revenue",    revenue);
+        reportData.put("total", (double) total);
+        reportData.put("occupied", (double) occupied);
+        reportData.put("booked", (double) booked);
+        reportData.put("available", (double) available);
+        reportData.put("revenue", revenue);
         reportData.put("occupancyPct", occupancyPct);
 
         logger.info(String.format("Report: Occupancy=%.1f%%, Revenue=Rs.%.2f",
@@ -127,8 +129,19 @@ public class OccupancyReporterThread {
     }
 
     // Getters — used by ThreadMonitorTab
-    public ConcurrentHashMap<String, Double> getReportData()       { return reportData; }
-    public int getTotalBookingsProcessed()  { return totalBookingsProcessed.get(); }
-    public int getReportCount()            { return reportCount.get(); }
-    public long getLastReportMillis()      { return lastReportMillis; }
+    public ConcurrentHashMap<String, Double> getReportData() {
+        return reportData;
+    }
+
+    public int getTotalBookingsProcessed() {
+        return totalBookingsProcessed.get();
+    }
+
+    public int getReportCount() {
+        return reportCount.get();
+    }
+
+    public long getLastReportMillis() {
+        return lastReportMillis;
+    }
 }
