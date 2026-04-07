@@ -1,3 +1,8 @@
+/*
+ * MainWindow builds the JavaFX user interface for hotel operations.
+ * It owns the dashboard, room, guest, booking, and thread-monitor views,
+ * plus the shared alert banner used to display user-facing errors and status messages.
+ */
 package com.hotel.ui;
 
 import com.hotel.io.InvoiceExporter;
@@ -79,6 +84,7 @@ public class MainWindow {
         brand.getStyleClass().add("sidebar-brand");
         VBox.setMargin(brand, new Insets(40, 0, 40, 30));
 
+        // One toggle group keeps the sidebar selection mutually exclusive.
         ToggleGroup navGroup = new ToggleGroup();
         ToggleButton navDash = navButton("Dashboard", navGroup);
         ToggleButton navRooms = navButton("Rooms", navGroup);
@@ -98,6 +104,7 @@ public class MainWindow {
         Region viewBookings = buildBookingsView();
         Region viewThreads = buildThreadMonitorView();
 
+        // Each sidebar action swaps the content view without rebuilding the shell.
         navDash.setOnAction(e -> {
             if (navDash.isSelected())
                 setView(contentArea, viewDashboard);
@@ -123,9 +130,11 @@ public class MainWindow {
         navDash.setSelected(true);
         setView(contentArea, viewDashboard);
 
+        // Shared alert banner for validation errors and background-thread messages.
         alertBannerText = new Label();
         alertBannerText.setStyle("-fx-text-fill: white; -fx-font-size: 13px; -fx-font-weight: bold;");
 
+        // Manual dismiss button so users can clear the message immediately.
         Button alertClose = new Button("X");
         alertClose.setFocusTraversable(false);
         alertClose.setOnAction(e -> hideAlert());
@@ -142,6 +151,7 @@ public class MainWindow {
         alertBanner.setVisible(false);
         alertBanner.managedProperty().bind(alertBanner.visibleProperty());
 
+        // Auto-hide after a short delay so the banner does not stay on screen forever.
         alertHideTransition = new PauseTransition(Duration.seconds(4));
         alertHideTransition.setOnFinished(e -> hideAlert());
 
@@ -603,6 +613,7 @@ public class MainWindow {
         grid.addRow(7, new Label(), fMinibar);
         dlg.getDialogPane().setContent(grid);
 
+        // Build the Room object only when all inputs are valid.
         dlg.setResultConverter(btn -> {
             if (btn == ButtonType.OK) {
                 try {
@@ -610,6 +621,7 @@ public class MainWindow {
                     int floor = Integer.parseInt(fFloor.getText().trim());
                     int occ = Integer.parseInt(fOcc.getText().trim());
                     String desc = fDesc.getText().trim();
+                    // Reject empty or non-positive room details before creating the model.
                     if (floor <= 0) {
                         throw new IllegalArgumentException("Floor must be greater than 0.");
                     }
@@ -635,6 +647,7 @@ public class MainWindow {
             return null;
         });
 
+        // Persist the new room only after validation and duplicate-ID checks pass.
         dlg.showAndWait().ifPresent(room -> {
             if (!roomRepo.exists(room.getRoomId())) {
                 try {
@@ -677,6 +690,7 @@ public class MainWindow {
         grid.addRow(6, lbl("ID Number:"), fIdNum);
         dlg.getDialogPane().setContent(grid);
 
+        // Guest creation is intentionally simple: collect input and store the new profile.
         dlg.setResultConverter(btn -> {
             if (btn == ButtonType.OK) {
                 try {
@@ -718,6 +732,7 @@ public class MainWindow {
         grid.addRow(3, lbl("Check-Out:"), fCheckOut);
         dlg.getDialogPane().setContent(grid);
 
+        // The booking form delegates validation to the service layer.
         dlg.setResultConverter(btn -> {
             if (btn == ButtonType.OK) {
                 String result = bookingService.bookRoom(
@@ -740,6 +755,7 @@ public class MainWindow {
     }
 
     public void showAlert(String message) {
+        // Replace the current banner text and restart the auto-hide timer.
         alertBannerText.setText(message == null || message.trim().isEmpty()
                 ? "An unexpected error occurred."
                 : message);
@@ -749,6 +765,7 @@ public class MainWindow {
     }
 
     private void hideAlert() {
+        // Hide the banner and clear its text so the next message starts fresh.
         alertHideTransition.stop();
         alertBanner.setVisible(false);
         alertBannerText.setText("");
@@ -771,6 +788,7 @@ public class MainWindow {
 
     // HELPERS
     private void refreshAllLists() {
+        // Keep the observable lists aligned with the repositories after any mutation.
         roomList.setAll(roomRepo.getAllSorted());
         guestList.setAll(guestRepo.getAll());
         bookingList.setAll(bookingRepo.getAll());
@@ -824,6 +842,7 @@ public class MainWindow {
     }
 
     private void roomFileManager_write(int idx, Room room) {
+        // This helper currently registers the RAF index used for in-place updates.
         bookingService.registerRoomIndex(room.getRoomId(), idx);
     }
 
