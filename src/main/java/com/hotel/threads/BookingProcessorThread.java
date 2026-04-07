@@ -6,6 +6,7 @@ import javafx.application.Platform;
 
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
@@ -51,6 +52,9 @@ public class BookingProcessorThread implements Runnable {
     private final LogManager       logger;
     private final Consumer<String> resultCallback; // posts result back to UI
     private volatile boolean       running = true;
+    private final AtomicInteger    processedRequestCount = new AtomicInteger(0);
+    private volatile long          lastProcessedMillis = -1;
+    private volatile Thread        workerThread;
 
     public BookingProcessorThread(BookingService bookingService,
                                   LogManager logger,
@@ -78,6 +82,7 @@ public class BookingProcessorThread implements Runnable {
 
     @Override
     public void run() {
+        workerThread = Thread.currentThread();
         logger.info("BookingProcessorThread started (Producer-Consumer).");
 
         while (running) {
@@ -106,6 +111,8 @@ public class BookingProcessorThread implements Runnable {
     private void process(BookingRequest req) {
         String result = bookingService.bookRoomAsync(
                 req.guestId, req.roomId, req.checkIn, req.checkOut);
+        processedRequestCount.incrementAndGet();
+        lastProcessedMillis = System.currentTimeMillis();
         logger.info("BookingProcessor result: " + result);
         Platform.runLater(() -> resultCallback.accept(result));
     }
@@ -116,5 +123,23 @@ public class BookingProcessorThread implements Runnable {
         synchronized (taskQueue) {
             taskQueue.notifyAll(); // wake thread so it can see running=false and exit
         }
+    }
+
+    public int getPendingRequestCount() {
+        synchronized (taskQueue) {
+            return taskQueue.size();
+        }
+    }
+
+    public int getProcessedRequestCount() {
+        return processedRequestCount.get();
+    }
+
+    public long getLastProcessedMillis() {
+        return lastProcessedMillis;
+    }
+
+    public Thread.State getThreadState() {
+        return workerThread != null ? workerThread.getState() : Thread.State.NEW;
     }
 }

@@ -43,6 +43,8 @@ public class RoomStatusUpdaterThread implements Runnable {
     private final LogManager      logger;
     private final Runnable        uiRefreshCallback;
     private Thread                thread; // reference for interrupt support
+    private volatile int          lastRecordCount = 0;
+    private volatile long         lastCheckMillis = -1;
 
     public RoomStatusUpdaterThread(RoomFileManager roomFileManager,
                                    RoomRepository roomRepo,
@@ -84,6 +86,8 @@ public class RoomStatusUpdaterThread implements Runnable {
     private void checkForUpdates() {
         try {
             int records = roomFileManager.getTotalRecords();
+            lastRecordCount = records;
+            lastCheckMillis = System.currentTimeMillis();
             if (records > 0) {
                 // Safe UI refresh — always via Platform.runLater()
                 Platform.runLater(uiRefreshCallback);
@@ -99,4 +103,8 @@ public class RoomStatusUpdaterThread implements Runnable {
     }
 
     public boolean isRunning() { return running; }
+
+    public int getLastRecordCount() { return lastRecordCount; }
+
+    public long getLastCheckMillis() { return lastCheckMillis; }
 }

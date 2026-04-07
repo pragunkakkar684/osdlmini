@@ -54,11 +54,15 @@ public class Main extends Application {
             roomRepo, bookingRepo, roomFileMgr, logger);
 
     // ── Thread references (kept for stop() cleanup) ────────────────────
+    private CheckoutReminderThread  reminderTask;
     private Thread                      reminderThread;
+    private AutoSaveThread          autoSaveTask;
     private Thread                      autoSaveThread;
     private OccupancyReporterThread     occupancyReporter;
+    private BookingProcessorThread   bookingProcessorTask;
     private BookingProcessorThread      bookingProcessor;
     private Thread                      bookingProcessorThread;
+    private RoomStatusUpdaterThread  statusUpdaterTask;
     private RoomStatusUpdaterThread     statusUpdater;
     private Thread                      statusUpdaterThread;
 
@@ -81,6 +85,9 @@ public class Main extends Application {
 
         // 3. Launch all background threads
         startAllThreads(mainWindow);
+        mainWindow.setThreadMonitorContext(
+                reminderThread, autoSaveThread, bookingProcessorThread, statusUpdaterThread,
+                reminderTask, autoSaveTask, occupancyReporter, bookingProcessorTask, statusUpdaterTask);
 
         // 4. Show the JavaFX window
         primaryStage.setTitle("Grand Hotel Management System");
@@ -144,18 +151,19 @@ public class Main extends Application {
     private void startAllThreads(MainWindow mainWindow) {
 
         // Thread 1: CheckoutReminderThread — Runnable + synchronized block
+        reminderTask = new CheckoutReminderThread(bookingRepo, logger,
+                        msg -> Platform.runLater(() -> mainWindow.showAlert(msg)));
         reminderThread = new Thread(
-                new CheckoutReminderThread(bookingRepo, logger,
-                        msg -> Platform.runLater(() -> mainWindow.showAlert(msg))),
+                reminderTask,
                 "CheckoutReminderThread");
         reminderThread.setDaemon(true);
         reminderThread.start();
 
         // Thread 2: AutoSaveThread — Daemon + ReentrantLock
-        AutoSaveThread autoSave = new AutoSaveThread(
+        autoSaveTask = new AutoSaveThread(
                 roomRepo, guestRepo, bookingRepo,
                 roomDM, guestDM, bookingDM, logger, fileLock);
-        autoSaveThread = new Thread(autoSave, "AutoSaveThread");
+        autoSaveThread = new Thread(autoSaveTask, "AutoSaveThread");
         autoSaveThread.setDaemon(true);
         autoSaveThread.start();
 
@@ -166,17 +174,19 @@ public class Main extends Application {
         occupancyReporter.start();
 
         // Thread 4: BookingProcessorThread — wait()/notifyAll() producer-consumer
-        bookingProcessor = new BookingProcessorThread(
+        bookingProcessorTask = new BookingProcessorThread(
                 bookingService, logger,
                 result -> Platform.runLater(() -> mainWindow.showBookingResult(result)));
+        bookingProcessor = bookingProcessorTask;
         bookingProcessorThread = new Thread(bookingProcessor, "BookingProcessorThread");
         bookingProcessorThread.setDaemon(true);
         bookingProcessorThread.start();
 
         // Thread 5: RoomStatusUpdaterThread — volatile boolean
-        statusUpdater = new RoomStatusUpdaterThread(
+        statusUpdaterTask = new RoomStatusUpdaterThread(
                 roomFileMgr, roomRepo, logger,
                 () -> Platform.runLater(mainWindow::refreshRoomTable));
+        statusUpdater = statusUpdaterTask;
         statusUpdaterThread = new Thread(statusUpdater, "RoomStatusUpdaterThread");
         statusUpdaterThread.setDaemon(true);
         statusUpdaterThread.start();

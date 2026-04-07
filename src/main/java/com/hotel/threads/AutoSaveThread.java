@@ -10,6 +10,7 @@ import com.hotel.repository.GuestRepository;
 import com.hotel.repository.RoomRepository;
 
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -47,6 +48,9 @@ public class AutoSaveThread implements Runnable {
     // Shared ReentrantLock — also used by other threads that write files
     // Ensures only one thread writes to files at a time
     private final ReentrantLock fileLock;
+    private final AtomicInteger successfulSaveCount = new AtomicInteger(0);
+    private volatile long lastSuccessfulSaveMillis = -1;
+    private volatile String lastSaveMessage = "Waiting for first autosave.";
 
     public AutoSaveThread(RoomRepository roomRepo, GuestRepository guestRepo,
                           BookingRepository bookingRepo,
@@ -91,8 +95,12 @@ public class AutoSaveThread implements Runnable {
                     roomDM.save(roomRepo.getAll());
                     guestDM.save(guestRepo.getAll());
                     bookingDM.save(bookingRepo.getAll());
+                    successfulSaveCount.incrementAndGet();
+                    lastSuccessfulSaveMillis = System.currentTimeMillis();
+                    lastSaveMessage = "Autosave completed successfully.";
                     logger.info("AutoSave completed successfully.");
                 } catch (Exception e) {
+                    lastSaveMessage = "Autosave failed: " + e.getMessage();
                     logger.error("AutoSave failed: " + e.getMessage());
                 } finally {
                     fileLock.unlock(); // ALWAYS unlock in finally — even if exception thrown
@@ -103,5 +111,17 @@ public class AutoSaveThread implements Runnable {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    public int getSuccessfulSaveCount() {
+        return successfulSaveCount.get();
+    }
+
+    public long getLastSuccessfulSaveMillis() {
+        return lastSuccessfulSaveMillis;
+    }
+
+    public String getLastSaveMessage() {
+        return lastSaveMessage;
     }
 }

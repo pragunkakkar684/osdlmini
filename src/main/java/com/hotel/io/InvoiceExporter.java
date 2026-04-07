@@ -10,27 +10,27 @@ import java.time.format.DateTimeFormatter;
  * Exports billing invoices as human-readable .txt files.
  *
  * KEY CONCEPT: Character Streams
- *   BufferedWriter wraps FileWriter to write TEXT to a file efficiently.
- *   Unlike byte streams (ObjectOutputStream), character streams handle
- *   encoding automatically — text is written as UTF-8 characters.
+ * BufferedWriter wraps FileWriter to write TEXT to a file efficiently.
+ * Unlike byte streams (ObjectOutputStream), character streams handle
+ * encoding automatically — text is written as UTF-8 characters.
  *
  * Stream chain:
- *   String text  →  BufferedWriter  →  FileWriter  →  .txt file
+ * String text → BufferedWriter → FileWriter → .txt file
  *
- *   FileWriter    = character stream that writes chars to a file
- *   BufferedWriter = wraps FileWriter, buffers writes in memory
- *                   so it doesn't hit the disk for every single character.
- *                   Flush happens when buffer is full or writer is closed.
+ * FileWriter = character stream that writes chars to a file
+ * BufferedWriter = wraps FileWriter, buffers writes in memory
+ * so it doesn't hit the disk for every single character.
+ * Flush happens when buffer is full or writer is closed.
  *
  * COMPARISON with byte streams used in DataManager:
- *   DataManager (byte)  → ObjectOutputStream → binary .dat file (not human-readable)
- *   InvoiceExporter (char) → BufferedWriter  → text .txt file (human-readable)
+ * DataManager (byte) → ObjectOutputStream → binary .dat file (not
+ * human-readable)
+ * InvoiceExporter (char) → BufferedWriter → text .txt file (human-readable)
  */
 public class InvoiceExporter {
 
     private final String invoiceDir;
-    private static final DateTimeFormatter FMT =
-            DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm");
+    private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm");
 
     public InvoiceExporter(String invoiceDir) {
         this.invoiceDir = invoiceDir;
@@ -40,14 +40,14 @@ public class InvoiceExporter {
     /**
      * Generates and writes a formatted invoice .txt file.
      *
-     * @param booking      the booking being checked out
-     * @param guestName    guest's full name
-     * @param roomDetails  room summary string
-     * @param amount       final calculated amount
-     * @return             absolute path of the created invoice file
+     * @param booking     the booking being checked out
+     * @param guestName   guest's full name
+     * @param roomDetails room summary string
+     * @param amount      final calculated amount
+     * @return absolute path of the created invoice file
      */
     public String exportInvoice(Booking booking, String guestName,
-                                String roomDetails, double amount) throws IOException {
+            String roomDetails, double amount) throws IOException {
 
         String fileName = invoiceDir + File.separator
                 + "INV_" + booking.getBookingId() + ".txt";
@@ -82,7 +82,11 @@ public class InvoiceExporter {
 
     /** Writes one line + newline using writer.write() + writer.newLine() */
     private void writeLine(BufferedWriter writer, String line) throws IOException {
-        writer.write(line);    // write the text
-        writer.newLine();      // write OS-appropriate newline (\n or \r\n)
+        writer.write(line); // write the text
+        writer.newLine(); // write OS-appropriate newline (\n or \r\n)
+    }
+
+    public String getInvoiceDir() {
+        return invoiceDir;
     }
 }

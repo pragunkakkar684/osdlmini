@@ -52,6 +52,9 @@ public class OccupancyReporterThread {
     private final Consumer<ConcurrentHashMap<String, Double>> uiCallback;
 
     private ScheduledExecutorService executor;
+    private volatile Thread workerThread;
+    private final AtomicInteger reportCount = new AtomicInteger(0);
+    private volatile long lastReportMillis = -1;
 
     public OccupancyReporterThread(RoomRepository roomRepo,
                                    BookingRepository bookingRepo,
@@ -70,6 +73,7 @@ public class OccupancyReporterThread {
     public void start() {
         executor = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "OccupancyReporterThread");
+            workerThread = t;
             t.setDaemon(true); // daemon — won't prevent app shutdown
             return t;
         });
@@ -90,6 +94,8 @@ public class OccupancyReporterThread {
 
         // AtomicInteger.incrementAndGet() — atomic, no synchronized block needed
         totalBookingsProcessed.incrementAndGet();
+        reportCount.incrementAndGet();
+        lastReportMillis = System.currentTimeMillis();
 
         // ConcurrentHashMap.put() — thread-safe without any lock
         reportData.put("total",      (double) total);
@@ -112,7 +118,17 @@ public class OccupancyReporterThread {
         }
     }
 
+    public boolean isActive() {
+        return executor != null && !executor.isShutdown();
+    }
+
+    public Thread.State getThreadState() {
+        return workerThread != null ? workerThread.getState() : Thread.State.NEW;
+    }
+
     // Getters — used by ThreadMonitorTab
     public ConcurrentHashMap<String, Double> getReportData()       { return reportData; }
     public int getTotalBookingsProcessed()  { return totalBookingsProcessed.get(); }
+    public int getReportCount()            { return reportCount.get(); }
+    public long getLastReportMillis()      { return lastReportMillis; }
 }

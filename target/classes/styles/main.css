@@ -56,6 +56,47 @@
     -fx-effect: dropshadow(three-pass-box, rgba(15,23,42,0.08), 14, 0, 0, 4);
 }
 
+.dashboard-graph-card {
+    -fx-alignment: top-left;
+}
+
+.occupancy-chart {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.occupancy-chart .chart-content {
+    -fx-padding: 0;
+}
+
+.occupancy-chart .chart-legend {
+    visibility: hidden;
+}
+
+.occupancy-chart .data0.chart-pie {
+    -fx-pie-color: #2563EB;
+}
+
+.occupancy-chart .data1.chart-pie {
+    -fx-pie-color: #D97706;
+}
+
+.occupancy-chart .data2.chart-pie {
+    -fx-pie-color: #10B981;
+}
+
+.thread-monitor-stack {
+    -fx-padding: 0;
+}
+
+.thread-card {
+    -fx-background-color: #FFFFFF;
+    -fx-background-radius: 8;
+    -fx-border-color: #E5E7EB;
+    -fx-border-radius: 8;
+    -fx-effect: dropshadow(three-pass-box, rgba(15,23,42,0.04), 8, 0, 0, 2);
+}
+
 .stat-card {
     -fx-background-color: #FFFFFF;
     -fx-background-radius: 8;

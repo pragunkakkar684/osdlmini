@@ -7,6 +7,7 @@ import javafx.application.Platform;
 
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
@@ -34,6 +35,9 @@ public class CheckoutReminderThread implements Runnable {
     private final BookingRepository bookingRepository;
     private final LogManager        logger;
     private final Consumer<String>  alertCallback; // sends message to JavaFX UI thread
+    private final AtomicInteger      scanCount = new AtomicInteger(0);
+    private volatile int             lastDueTodayCount = 0;
+    private volatile long            lastScanMillis = -1;
 
     public CheckoutReminderThread(BookingRepository bookingRepo,
                                   LogManager logger,
@@ -62,12 +66,15 @@ public class CheckoutReminderThread implements Runnable {
 
     private void checkDueCheckouts() {
         PriorityQueue<Booking> queue = bookingRepository.getCheckoutQueue();
+        scanCount.incrementAndGet();
 
         // SYNCHRONIZED BLOCK — intrinsic lock on the shared PriorityQueue object.
         // Any other thread trying to access this same queue object must WAIT
         // until this block finishes and releases the lock.
         synchronized (queue) {
             List<Booking> dueToday = bookingRepository.getDueToday();
+            lastDueTodayCount = dueToday.size();
+            lastScanMillis = System.currentTimeMillis();
             if (!dueToday.isEmpty()) {
                 String msg = "⏰ " + dueToday.size() + " checkout(s) due today!";
                 logger.warn(msg);
@@ -78,5 +85,17 @@ public class CheckoutReminderThread implements Runnable {
                 Platform.runLater(() -> alertCallback.accept(msg));
             }
         } // lock released here automatically
+    }
+
+    public int getScanCount() {
+        return scanCount.get();
+    }
+
+    public int getLastDueTodayCount() {
+        return lastDueTodayCount;
+    }
+
+    public long getLastScanMillis() {
+        return lastScanMillis;
     }
 }
