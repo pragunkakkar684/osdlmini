@@ -31,5 +31,6 @@ com\hotel\io\DataManager.class
 com\hotel\io\LogManager.class
 com\hotel\threads\RoomStatusUpdaterThread.class
 com\hotel\interfaces\Billable.class
+com\hotel\model\RoomIdValidator.class
 com\hotel\service\BookingService.class
 com\hotel\ui\MainWindow$5.class
