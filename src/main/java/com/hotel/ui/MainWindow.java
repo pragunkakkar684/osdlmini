@@ -15,6 +15,13 @@ import com.hotel.repository.BookingRepository;
 import com.hotel.repository.GuestRepository;
 import com.hotel.repository.RoomRepository;
 import com.hotel.service.BookingService;
+import com.hotel.threads.AutoSaveThread;
+import com.hotel.threads.BookingProcessorThread;
+import com.hotel.threads.CheckoutReminderThread;
+import com.hotel.threads.OccupancyReporterThread;
+import com.hotel.threads.RoomStatusUpdaterThread;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
@@ -23,16 +30,28 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.chart.PieChart;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.util.Duration;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -56,6 +75,24 @@ public class MainWindow {
     private HBox selectedBookingCard;
 
     private Label lblTotal, lblAvailable, lblOccupied, lblRevenue;
+    private Label lblOccupancyRate;
+    private PieChart occupancyChart;
+    private final ObservableList<PieChart.Data> occupancyChartData = FXCollections.observableArrayList();
+    private final ConcurrentHashMap<String, Double> latestDashboardData = new ConcurrentHashMap<>();
+    private Thread reminderThreadRef;
+    private Thread autoSaveThreadRef;
+    private Thread bookingProcessorThreadRef;
+    private Thread statusUpdaterThreadRef;
+    private CheckoutReminderThread reminderTaskRef;
+    private AutoSaveThread autoSaveTaskRef;
+    private OccupancyReporterThread occupancyReporterRef;
+    private BookingProcessorThread bookingProcessorTaskRef;
+    private RoomStatusUpdaterThread statusUpdaterTaskRef;
+    private final Map<String, Label> threadStateLabels = new HashMap<>();
+    private final Map<String, Label> threadUsageLabels = new HashMap<>();
+    private final Map<String, Label> threadDetailLabels = new HashMap<>();
+    private Label threadSummaryLabel;
+    private Timeline threadMonitorTimeline;
     private HBox alertBanner;
     private Label alertBannerText;
     private PauseTransition alertHideTransition;
@@ -70,6 +107,27 @@ public class MainWindow {
         this.invoiceExporter = invoiceExporter;
         this.logger = logger;
         refreshAllLists();
+    }
+
+    public void setThreadMonitorContext(Thread reminderThread,
+            Thread autoSaveThread,
+            Thread bookingProcessorThread,
+            Thread statusUpdaterThread,
+            CheckoutReminderThread reminderTask,
+            AutoSaveThread autoSaveTask,
+            OccupancyReporterThread occupancyReporter,
+            BookingProcessorThread bookingProcessorTask,
+            RoomStatusUpdaterThread statusUpdaterTask) {
+        this.reminderThreadRef = reminderThread;
+        this.autoSaveThreadRef = autoSaveThread;
+        this.bookingProcessorThreadRef = bookingProcessorThread;
+        this.statusUpdaterThreadRef = statusUpdaterThread;
+        this.reminderTaskRef = reminderTask;
+        this.autoSaveTaskRef = autoSaveTask;
+        this.occupancyReporterRef = occupancyReporter;
+        this.bookingProcessorTaskRef = bookingProcessorTask;
+        this.statusUpdaterTaskRef = statusUpdaterTask;
+        refreshThreadMonitor();
     }
 
     public Scene buildScene() {
@@ -196,9 +254,27 @@ public class MainWindow {
                 new Label("Use the Rooms and Bookings sections for day-to-day operations."));
         summaryCard.getStyleClass().add("dashboard-card");
         summaryCard.setPadding(new Insets(20));
+        summaryCard.setMaxWidth(Double.MAX_VALUE);
 
-        VBox layout = new VBox(20, headerLabel("Dashboard"), statsRow, summaryCard);
+        Button btnViewLogs = actionButton("View Logs", null);
+        Button btnViewInvoices = actionButton("View Invoices", null);
+        HBox dataActions = new HBox(10, btnViewLogs, btnViewInvoices);
+        dataActions.setAlignment(Pos.CENTER_LEFT);
+        summaryCard.getChildren().add(dataActions);
+
+        btnViewLogs.setOnAction(e -> showLogsDialog());
+        btnViewInvoices.setOnAction(e -> showInvoicesDialog());
+
+        VBox occupancyCard = buildOccupancyCard();
+        HBox.setHgrow(summaryCard, Priority.ALWAYS);
+
+        HBox overviewRow = new HBox(20, occupancyCard, summaryCard);
+        overviewRow.setAlignment(Pos.TOP_LEFT);
+
+        VBox layout = new VBox(20, headerLabel("Dashboard"), statsRow, overviewRow);
         layout.setPadding(new Insets(40));
+
+        updateDashboard(latestDashboardData);
 
         ScrollPane sp = new ScrollPane(layout);
         sp.setFitToWidth(true);
@@ -527,39 +603,24 @@ public class MainWindow {
     // THREAD MONITOR VIEW
     private Region buildThreadMonitorView() {
         Label info = new Label(
-                "Live thread states (from Thread.getState()).\n"
-                        + "Each thread uses a different synchronization mechanism — see below.\n");
-        info.setStyle("-fx-text-fill: #9CAEA5; -fx-font-size: 13px;");
+                "Live thread states plus the work each thread is actually doing right now.");
+        info.setStyle("-fx-text-fill: #64748B; -fx-font-size: 13px;");
 
-        GridPane grid = new GridPane();
-        grid.setHgap(20);
-        grid.setVgap(12);
-        grid.setPadding(new Insets(20));
-        grid.getStyleClass().add("dashboard-card");
+        threadSummaryLabel = new Label();
+        threadSummaryLabel.setStyle("-fx-text-fill: #0F172A; -fx-font-size: 16px; -fx-font-weight: bold;");
 
-        String[][] threads = {
-                { "CheckoutReminderThread", "synchronized block (intrinsic lock on PriorityQueue)", "#E74C3C" },
-                { "AutoSaveThread", "ReentrantLock + tryLock(3s) + daemon thread", "#D4AF37" },
-                { "OccupancyReporter", "ScheduledExecutorService + ConcurrentHashMap + AtomicInteger", "#2ECC71" },
-                { "BookingProcessor", "wait() / notifyAll() — Producer-Consumer pattern", "#1A3626" },
-                { "RoomStatusUpdater", "volatile boolean — cross-thread visibility", "#9B59B6" },
-        };
-
-        grid.add(boldLabel("Thread Name"), 0, 0);
-        grid.add(boldLabel("Sync Mechanism"), 1, 0);
-        grid.add(boldLabel("Status"), 2, 0);
-
-        for (int i = 0; i < threads.length; i++) {
-            Label name = new Label(threads[i][0]);
-            Label mech = new Label(threads[i][1]);
-            Label state = new Label("● RUNNING");
-            name.setStyle("-fx-text-fill: #1A3626; -fx-font-weight: bold;");
-            mech.setStyle("-fx-text-fill: #9CAEA5; -fx-font-size: 12px;");
-            state.setStyle("-fx-text-fill: " + threads[i][2] + "; -fx-font-weight: bold;");
-            grid.add(name, 0, i + 1);
-            grid.add(mech, 1, i + 1);
-            grid.add(state, 2, i + 1);
-        }
+        VBox cards = new VBox(12,
+                createThreadCard("reminder", "Checkout Reminder",
+                        "Scans due checkouts every 60 seconds and alerts the UI.", "#E74C3C"),
+                createThreadCard("autosave", "Auto Save",
+                        "Writes rooms, guests, and bookings to disk every 5 minutes.", "#D4AF37"),
+                createThreadCard("occupancy", "Occupancy Reporter",
+                        "Refreshes occupancy and revenue data every 30 seconds.", "#2ECC71"),
+                createThreadCard("booking", "Booking Processor",
+                        "Consumes booking requests asynchronously so the UI stays responsive.", "#1A3626"),
+                createThreadCard("room-status", "Room Status Updater",
+                        "Polls the RAF file every 10 seconds for room status changes.", "#9B59B6"));
+        cards.getStyleClass().add("thread-monitor-stack");
 
         Label syncSummary = new Label(
                 "\nSynchronization primitives used in this project:\n"
@@ -570,15 +631,213 @@ public class MainWindow {
                         + "  5. AtomicInteger        — hardware CAS, no synchronized needed\n"
                         + "  6. wait() / notifyAll() — monitor object, producer-consumer\n"
                         + "  7. volatile             — memory visibility across CPU caches\n");
-        syncSummary.setStyle("-fx-text-fill: #9CAEA5; -fx-font-family: monospace; -fx-font-size: 13px;");
+        syncSummary.setStyle("-fx-text-fill: #94A3B8; -fx-font-family: monospace; -fx-font-size: 13px;");
 
-        VBox layout = new VBox(15, headerLabel("Thread Monitor"), info, grid, syncSummary);
+        VBox layout = new VBox(15, headerLabel("Thread Monitor"), info, threadSummaryLabel, cards, syncSummary);
         layout.setPadding(new Insets(40));
+
+        if (threadMonitorTimeline == null) {
+            threadMonitorTimeline = new Timeline(new KeyFrame(Duration.seconds(2), e -> refreshThreadMonitor()));
+            threadMonitorTimeline.setCycleCount(Timeline.INDEFINITE);
+            threadMonitorTimeline.play();
+        }
+
+        refreshThreadMonitor();
 
         ScrollPane sp = new ScrollPane(layout);
         sp.setFitToWidth(true);
         sp.setStyle("-fx-background-color: transparent; -fx-background: #FAFAFA;");
         return sp;
+    }
+
+    private VBox createThreadCard(String key, String title, String description, String accent) {
+        Label name = new Label(title);
+        name.setStyle("-fx-text-fill: #0F172A; -fx-font-weight: bold; -fx-font-size: 16px;");
+
+        Label desc = new Label(description);
+        desc.setWrapText(true);
+        desc.setStyle("-fx-text-fill: #64748B; -fx-font-size: 12px;");
+
+        Label state = new Label("State: pending");
+        state.setStyle("-fx-text-fill: " + accent + "; -fx-font-weight: bold;");
+
+        Label usage = new Label();
+        usage.setWrapText(true);
+        usage.setStyle("-fx-text-fill: #1E293B; -fx-font-size: 12px;");
+
+        Label detail = new Label();
+        detail.setWrapText(true);
+        detail.setStyle("-fx-text-fill: #64748B; -fx-font-size: 12px;");
+
+        threadStateLabels.put(key, state);
+        threadUsageLabels.put(key, usage);
+        threadDetailLabels.put(key, detail);
+
+        VBox card = new VBox(8, name, desc, state, usage, detail);
+        card.getStyleClass().add("dashboard-card");
+        card.getStyleClass().add("thread-card");
+        card.setPadding(new Insets(16));
+        return card;
+    }
+
+    private void refreshThreadMonitor() {
+        if (threadSummaryLabel != null) {
+            int total = 0;
+            int alive = 0;
+            int daemon = 0;
+
+            Thread[] threads = { reminderThreadRef, autoSaveThreadRef, bookingProcessorThreadRef,
+                    statusUpdaterThreadRef };
+            for (Thread thread : threads) {
+                if (thread == null) {
+                    continue;
+                }
+                total++;
+                if (thread.isAlive()) {
+                    alive++;
+                }
+                if (thread.isDaemon()) {
+                    daemon++;
+                }
+            }
+
+            boolean occupancyActive = occupancyReporterRef != null && occupancyReporterRef.isActive();
+            threadSummaryLabel.setText(String.format(
+                    "Monitoring %d background threads | %d alive | %d daemon | occupancy reporter %s",
+                    total, alive, daemon, occupancyActive ? "active" : "idle"));
+        }
+
+        updateReminderCard();
+        updateAutoSaveCard();
+        updateOccupancyCard();
+        updateBookingProcessorCard();
+        updateRoomStatusCard();
+    }
+
+    private void updateReminderCard() {
+        Label state = threadStateLabels.get("reminder");
+        Label usage = threadUsageLabels.get("reminder");
+        Label detail = threadDetailLabels.get("reminder");
+        if (state == null || usage == null || detail == null) {
+            return;
+        }
+
+        state.setText(formatThreadState(reminderThreadRef));
+        usage.setText("Usage: checks bookings due for checkout once every 60 seconds.");
+        int scanCount = reminderTaskRef != null ? reminderTaskRef.getScanCount() : 0;
+        int dueToday = reminderTaskRef != null ? reminderTaskRef.getLastDueTodayCount() : 0;
+        detail.setText(String.format("Scans: %d | Due today: %d | Last scan: %s",
+                scanCount, dueToday,
+                formatTimeAgo(reminderTaskRef != null ? reminderTaskRef.getLastScanMillis() : -1)));
+    }
+
+    private void updateAutoSaveCard() {
+        Label state = threadStateLabels.get("autosave");
+        Label usage = threadUsageLabels.get("autosave");
+        Label detail = threadDetailLabels.get("autosave");
+        if (state == null || usage == null || detail == null) {
+            return;
+        }
+
+        state.setText(formatThreadState(autoSaveThreadRef));
+        usage.setText("Usage: persists room, guest, and booking data every 5 minutes.");
+        int saves = autoSaveTaskRef != null ? autoSaveTaskRef.getSuccessfulSaveCount() : 0;
+        detail.setText(String.format("Successful saves: %d | Last save: %s | Status: %s",
+                saves,
+                formatTimeAgo(autoSaveTaskRef != null ? autoSaveTaskRef.getLastSuccessfulSaveMillis() : -1),
+                autoSaveTaskRef != null ? autoSaveTaskRef.getLastSaveMessage() : "Waiting for autosave"));
+    }
+
+    private void updateOccupancyCard() {
+        Label state = threadStateLabels.get("occupancy");
+        Label usage = threadUsageLabels.get("occupancy");
+        Label detail = threadDetailLabels.get("occupancy");
+        if (state == null || usage == null || detail == null) {
+            return;
+        }
+
+        Thread.State reporterState = occupancyReporterRef != null ? occupancyReporterRef.getThreadState()
+                : Thread.State.NEW;
+        state.setText("State: " + reporterState
+                + ((occupancyReporterRef != null && occupancyReporterRef.isActive()) ? " | active" : " | idle"));
+        usage.setText("Usage: recalculates occupancy and revenue every 30 seconds.");
+        int reports = occupancyReporterRef != null ? occupancyReporterRef.getReportCount() : 0;
+        double occupancyPct = occupancyReporterRef != null
+                ? occupancyReporterRef.getReportData().getOrDefault("occupancyPct", 0.0)
+                : 0.0;
+        double revenue = occupancyReporterRef != null
+                ? occupancyReporterRef.getReportData().getOrDefault("revenue", 0.0)
+                : 0.0;
+        detail.setText(String.format("Reports: %d | Occupancy: %.1f%% | Revenue: Rs. %,.0f | Last report: %s",
+                reports, occupancyPct, revenue,
+                formatTimeAgo(occupancyReporterRef != null ? occupancyReporterRef.getLastReportMillis() : -1)));
+    }
+
+    private void updateBookingProcessorCard() {
+        Label state = threadStateLabels.get("booking");
+        Label usage = threadUsageLabels.get("booking");
+        Label detail = threadDetailLabels.get("booking");
+        if (state == null || usage == null || detail == null) {
+            return;
+        }
+
+        state.setText(formatThreadState(bookingProcessorThreadRef));
+        usage.setText("Usage: pulls booking requests from a queue and processes them asynchronously.");
+        int pending = bookingProcessorTaskRef != null ? bookingProcessorTaskRef.getPendingRequestCount() : 0;
+        int processed = bookingProcessorTaskRef != null ? bookingProcessorTaskRef.getProcessedRequestCount() : 0;
+        detail.setText(String.format("Pending queue: %d | Processed: %d | Last processed: %s",
+                pending, processed,
+                formatTimeAgo(
+                        bookingProcessorTaskRef != null ? bookingProcessorTaskRef.getLastProcessedMillis() : -1)));
+    }
+
+    private void updateRoomStatusCard() {
+        Label state = threadStateLabels.get("room-status");
+        Label usage = threadUsageLabels.get("room-status");
+        Label detail = threadDetailLabels.get("room-status");
+        if (state == null || usage == null || detail == null) {
+            return;
+        }
+
+        state.setText(formatThreadState(statusUpdaterThreadRef));
+        usage.setText("Usage: polls the RAF file for room changes every 10 seconds.");
+        int records = statusUpdaterTaskRef != null ? statusUpdaterTaskRef.getLastRecordCount() : 0;
+        detail.setText(String.format("Running: %s | RAF records: %d | Last check: %s",
+                statusUpdaterTaskRef != null && statusUpdaterTaskRef.isRunning() ? "yes" : "no",
+                records,
+                formatTimeAgo(statusUpdaterTaskRef != null ? statusUpdaterTaskRef.getLastCheckMillis() : -1)));
+    }
+
+    private String formatThreadState(Thread thread) {
+        if (thread == null) {
+            return "State: not started";
+        }
+        return "State: " + thread.getState() + (thread.isAlive() ? " | alive" : " | stopped")
+                + (thread.isDaemon() ? " | daemon" : "");
+    }
+
+    private String formatTimeAgo(long millis) {
+        if (millis <= 0) {
+            return "not yet";
+        }
+        long diff = System.currentTimeMillis() - millis;
+        if (diff < 1000) {
+            return "just now";
+        }
+        long seconds = diff / 1000;
+        if (seconds < 60) {
+            return seconds + "s ago";
+        }
+        long minutes = seconds / 60;
+        if (minutes < 60) {
+            return minutes + "m ago";
+        }
+        long hours = minutes / 60;
+        if (hours < 24) {
+            return hours + "h ago";
+        }
+        long days = hours / 24;
+        return days + "d ago";
     }
 
     // DIALOGS
@@ -690,13 +949,30 @@ public class MainWindow {
         grid.addRow(6, lbl("ID Number:"), fIdNum);
         dlg.getDialogPane().setContent(grid);
 
-        // Guest creation is intentionally simple: collect input and store the new profile.
+        // Guest creation is intentionally simple: collect input and store the new
+        // profile.
         dlg.setResultConverter(btn -> {
             if (btn == ButtonType.OK) {
                 try {
+                    String phone = fPhone.getText().trim();
+
+                    // Validate phone number is exactly 10 digits
+                    if (!isValidPhoneNumber(phone)) {
+                        showAlert("Phone number must be exactly 10 digits.");
+                        return null;
+                    }
+
+                    Integer age = Integer.valueOf(fAge.getText().trim());
+
+                    // Validate age is not less than 18
+                    if (!isValidAge(age)) {
+                        showAlert("Guest must be at least 18 years old to register.");
+                        return null;
+                    }
+
                     return new Guest(fId.getText().trim(), fName.getText().trim(),
-                            fPhone.getText().trim(), fEmail.getText().trim(),
-                            Integer.valueOf(fAge.getText().trim()),
+                            phone, fEmail.getText().trim(),
+                            age,
                             fIdType.getText().trim(), fIdNum.getText().trim());
                 } catch (Exception ex) {
                     return null;
@@ -748,6 +1024,15 @@ public class MainWindow {
 
     // PUBLIC CALLBACKS
     public void updateDashboard(ConcurrentHashMap<String, Double> data) {
+        latestDashboardData.clear();
+        latestDashboardData.putAll(data);
+
+        updateOccupancyChart(data);
+
+        if (lblTotal == null || lblAvailable == null || lblOccupied == null || lblRevenue == null) {
+            return;
+        }
+
         lblTotal.setText("Total Rooms\n" + data.getOrDefault("total", 0.0).intValue());
         lblAvailable.setText("Available\n" + data.getOrDefault("available", 0.0).intValue());
         lblOccupied.setText("Occupied\n" + data.getOrDefault("occupied", 0.0).intValue());
@@ -841,6 +1126,117 @@ public class MainWindow {
         }
     }
 
+    private void showLogsDialog() {
+        Dialog<Void> dlg = new Dialog<>();
+        dlg.setTitle("Recent Logs");
+        dlg.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        dlg.getDialogPane().getStyleClass().add("dialog-pane");
+
+        TextArea logArea = new TextArea(readTail(Path.of(logger.getLogFilePath()), 120));
+        logArea.setEditable(false);
+        logArea.setWrapText(false);
+        logArea.setPrefSize(760, 420);
+        logArea.setStyle("-fx-font-family: 'Consolas', monospace; -fx-font-size: 12px;");
+
+        VBox content = new VBox(10,
+                boldLabel("Latest Log Entries"),
+                new Label("Showing the most recent lines from hotel.log"),
+                logArea);
+        content.setPadding(new Insets(16));
+
+        dlg.getDialogPane().setContent(content);
+        dlg.showAndWait();
+    }
+
+    private void showInvoicesDialog() {
+        Dialog<Void> dlg = new Dialog<>();
+        dlg.setTitle("Invoices");
+        dlg.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        dlg.getDialogPane().getStyleClass().add("dialog-pane");
+
+        ListView<String> invoiceListView = new ListView<>();
+        invoiceListView.setPrefSize(260, 360);
+
+        TextArea previewArea = new TextArea();
+        previewArea.setEditable(false);
+        previewArea.setWrapText(false);
+        previewArea.setPrefSize(500, 360);
+        previewArea.setStyle("-fx-font-family: 'Consolas', monospace; -fx-font-size: 12px;");
+
+        List<Path> invoiceFiles = listInvoiceFiles();
+        if (invoiceFiles.isEmpty()) {
+            invoiceListView.getItems().add("No invoices found");
+            previewArea.setText("No invoice files have been generated yet.");
+            invoiceListView.setDisable(true);
+        } else {
+            for (Path invoice : invoiceFiles) {
+                invoiceListView.getItems().add(invoice.getFileName().toString());
+            }
+            invoiceListView.getSelectionModel().selectedIndexProperty().addListener((obs, old, idx) -> {
+                if (idx == null || idx.intValue() < 0 || idx.intValue() >= invoiceFiles.size()) {
+                    return;
+                }
+                previewArea.setText(readText(invoiceFiles.get(idx.intValue())));
+            });
+            invoiceListView.getSelectionModel().selectFirst();
+            previewArea.setText(readText(invoiceFiles.get(0)));
+        }
+
+        HBox body = new HBox(12, invoiceListView, previewArea);
+        HBox.setHgrow(previewArea, Priority.ALWAYS);
+
+        VBox content = new VBox(10,
+                boldLabel("Generated Invoices"),
+                new Label("Select an invoice to preview it."),
+                body);
+        content.setPadding(new Insets(16));
+
+        dlg.getDialogPane().setContent(content);
+        dlg.showAndWait();
+    }
+
+    private List<Path> listInvoiceFiles() {
+        List<Path> files = new ArrayList<>();
+        Path dir = Paths.get(invoiceExporter.getInvoiceDir());
+        if (!Files.isDirectory(dir)) {
+            return files;
+        }
+
+        try {
+            Files.list(dir)
+                    .filter(path -> path.getFileName().toString().toLowerCase().endsWith(".txt"))
+                    .sorted(Comparator.comparing(Path::getFileName).reversed())
+                    .forEach(files::add);
+        } catch (IOException ex) {
+            logger.error("Failed to list invoices: " + ex.getMessage());
+        }
+        return files;
+    }
+
+    private String readText(Path path) {
+        try {
+            return Files.readString(path, StandardCharsets.UTF_8);
+        } catch (IOException ex) {
+            return "Unable to read file: " + path.getFileName() + "\n" + ex.getMessage();
+        }
+    }
+
+    private String readTail(Path path, int maxLines) {
+        try {
+            if (!Files.exists(path)) {
+                return "No log file found yet.";
+            }
+            List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
+            if (lines.isEmpty()) {
+                return "Log file is currently empty.";
+            }
+            int start = Math.max(0, lines.size() - maxLines);
+            return String.join(System.lineSeparator(), lines.subList(start, lines.size()));
+        } catch (IOException ex) {
+            return "Unable to read log file: " + ex.getMessage();
+        }
+    }
+
     private void roomFileManager_write(int idx, Room room) {
         // This helper currently registers the RAF index used for in-place updates.
         bookingService.registerRoomIndex(room.getRoomId(), idx);
@@ -853,6 +1249,56 @@ public class MainWindow {
         l.setMinWidth(180);
         l.setAlignment(Pos.CENTER_LEFT);
         return l;
+    }
+
+    private VBox buildOccupancyCard() {
+        lblOccupancyRate = new Label("0.0% Occupied");
+        lblOccupancyRate.setStyle("-fx-text-fill: #0F172A; -fx-font-size: 24px; -fx-font-weight: bold;");
+
+        Label caption = new Label("Occupied, booked, and available rooms");
+        caption.setStyle("-fx-text-fill: #64748B; -fx-font-size: 12px;");
+
+        occupancyChart = new PieChart(occupancyChartData);
+        occupancyChart.setLabelsVisible(false);
+        occupancyChart.setLegendVisible(false);
+        occupancyChart.setAnimated(true);
+        occupancyChart.setStartAngle(90);
+        occupancyChart.setClockwise(true);
+        occupancyChart.setPrefSize(300, 220);
+        occupancyChart.setMinSize(300, 220);
+        occupancyChart.setMaxSize(300, 220);
+        occupancyChart.getStyleClass().add("occupancy-chart");
+
+        Label footer = new Label("Live data from OccupancyReporterThread");
+        footer.setStyle("-fx-text-fill: #94A3B8; -fx-font-size: 11px;");
+
+        VBox card = new VBox(8, boldLabel("Occupancy Overview"), caption, lblOccupancyRate, occupancyChart, footer);
+        card.getStyleClass().add("dashboard-card");
+        card.getStyleClass().add("dashboard-graph-card");
+        card.setPadding(new Insets(20));
+        card.setPrefWidth(360);
+        card.setMaxWidth(380);
+        return card;
+    }
+
+    private void updateOccupancyChart(ConcurrentHashMap<String, Double> data) {
+        if (occupancyChartData == null) {
+            return;
+        }
+
+        double occupied = data.getOrDefault("occupied", 0.0);
+        double booked = data.getOrDefault("booked", 0.0);
+        double available = data.getOrDefault("available", 0.0);
+        double occupancyPct = data.getOrDefault("occupancyPct", 0.0);
+
+        occupancyChartData.setAll(
+                new PieChart.Data("Occupied", occupied),
+                new PieChart.Data("Booked", booked),
+                new PieChart.Data("Available", available));
+
+        if (lblOccupancyRate != null) {
+            lblOccupancyRate.setText(String.format("%.1f%% Occupied", occupancyPct));
+        }
     }
 
     private Label headerLabel(String text) {
@@ -897,5 +1343,30 @@ public class MainWindow {
         Label l = new Label(text);
         l.setStyle("-fx-text-fill: #2C3E50; -fx-font-weight: bold;");
         return l;
+    }
+
+    /**
+     * Validates that the phone number is exactly 10 digits.
+     * Edge case: Phone numbers that are not 10 digits will be rejected,
+     * and the guest will not be registered.
+     */
+    private boolean isValidPhoneNumber(String phone) {
+        if (phone == null || phone.isEmpty()) {
+            return false;
+        }
+        // Check if phone number contains exactly 10 digits only
+        return phone.matches("\\d{10}");
+    }
+
+    /**
+     * Validates that the age is at least 18.
+     * Edge case: Guests under 18 years old will not be registered.
+     */
+    private boolean isValidAge(Integer age) {
+        if (age == null) {
+            return false;
+        }
+        // Age must be at least 18
+        return age >= 18;
     }
 }

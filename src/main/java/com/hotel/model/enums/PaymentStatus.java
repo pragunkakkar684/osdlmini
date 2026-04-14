@@ -11,10 +11,10 @@ package com.hotel.model.enums;
  */
 public enum PaymentStatus {
 
-    PENDING,    // booking made, not yet paid
-    PAID,       // checkout done, bill settled
-    REFUNDED,   // booking cancelled after partial payment
-    CANCELLED;  // booking cancelled before check-in
+    PENDING,    
+    PAID,       
+    REFUNDED,   
+    CANCELLED;  
 
     /**
      * Returns a user-friendly version of the constant name.

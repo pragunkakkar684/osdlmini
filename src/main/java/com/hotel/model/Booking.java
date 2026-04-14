@@ -57,10 +57,6 @@ public class Booking implements Serializable, Billable, Comparable<Booking> {
         this.numberOfNights = ChronoUnit.DAYS.between(checkInDate, checkOutDate);
     }
 
-    // -------------------------------------------------------------------
-    // Business methods (not just getters — real behaviour)
-    // -------------------------------------------------------------------
-
     /** Called when guest physically arrives at the hotel */
     public void doCheckIn() {
         doCheckIn(LocalDate.now());
