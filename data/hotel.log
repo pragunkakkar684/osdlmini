@@ -4869,3 +4869,17 @@
 [2026-04-13 22:07:56] [INFO ] CheckoutReminderThread shutting down.
 [2026-04-13 22:07:56] [INFO ] AutoSave completed successfully.
 [2026-04-13 22:07:56] [INFO ] Shutdown complete.
+[2026-04-15 03:19:10] [INFO ] Data loaded: 5 rooms, 3 guests, 11 bookings.
+[2026-04-15 03:19:10] [INFO ] CheckoutReminderThread started.
+[2026-04-15 03:19:10] [INFO ] AutoSaveThread started (daemon=true).
+[2026-04-15 03:19:10] [INFO ] OccupancyReporterThread (ScheduledExecutorService) started.
+[2026-04-15 03:19:10] [INFO ] BookingProcessorThread started (Producer-Consumer).
+[2026-04-15 03:19:10] [INFO ] All 5 background threads started.
+[2026-04-15 03:19:10] [INFO ] RoomStatusUpdaterThread started. Monitoring RAF file.
+[2026-04-15 03:19:10] [INFO ] Report: Occupancy=0.0%, Revenue=Rs.72168.00
+[2026-04-15 03:19:12] [INFO ] Application started successfully.
+[2026-04-15 03:19:20] [INFO ] Application shutting down.
+[2026-04-15 03:19:20] [INFO ] CheckoutReminderThread shutting down.
+[2026-04-15 03:19:20] [INFO ] RoomStatusUpdaterThread stopped gracefully.
+[2026-04-15 03:19:20] [INFO ] AutoSave completed successfully.
+[2026-04-15 03:19:20] [INFO ] Shutdown complete.
